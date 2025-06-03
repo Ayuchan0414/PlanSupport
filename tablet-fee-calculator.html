@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>料金計算・契約フォーム</title>
+  <!-- React関連のライブラリ -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background-color: #f5f5f5;
+    }
+    #app-container {
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .active-section {
+      background-color: #FCF7DE;
+    }
+    .inactive-section {
+      background-color: #e0e0e0;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .process-active {
+      background-color: #cfe2f3ff;
+    }
+    .process-inactive {
+      background-color: #e0e0e0;
+      opacity: 0.6;
+    }
+    .primary-button {
+      background-color: #F58220;
+      color: white;
+    }
+    .primary-button:hover {
+      background-color: #d66d0a;
+    }
+    .qr-placeholder {
+      width: 200px;
+      height: 200px;
+      border: 2px dashed #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container"></div>
+  
+  <script type="text/babel">
+    const App = () => {
+      // 料金プラン設定
+      const feeTable = {
+        "フルタイム": {
+          "月2回": 10980,
+          "月3回": 15470,
+          "月4回": 19960,
+          "月6回": 29940
+        },
+        "平日フル": {
+          "月2回": 9800,
+          "月3回": 13700,
+          "月4回": 17600,
+          "月6回": 26400
+        },
+        "いつでも夕方": {
+          "月2回": 8690,
+          "月3回": 12035,
+          "月4回": 15380,
+          "月6回": 23070
+        }
+      };
+
+      // 状態管理
+      const [currentStep, setCurrentStep] = React.useState(1);
+      const [plan, setPlan] = React.useState("");
+      const [frequency, setFrequency] = React.useState("");
+      const [joinAtTrial, setJoinAtTrial] = React.useState(true);
+      const [startTiming, setStartTiming] = React.useState("今月から始める");
+      
+      // 金額計算
+      const [thisMonthFee, setThisMonthFee] = React.useState(0);
+      const [nextMonthFee, setNextMonthFee] = React.useState(0);
+      const [registrationFee, setRegistrationFee] = React.useState(5950);
+      const [thisMonthTotal, setThisMonthTotal] = React.useState(0);
+      const [nextMonthTotal, setNextMonthTotal] = React.useState(0);
+
+      // 日付関連
+      const today = new Date();
+      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      
+      const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        return `${year}年${month}月${day}日`;
+      };
+
+      // 利用開始日の計算
+      const getStartDate = () => {
+        if (startTiming === "今月から始める") {
+          return formatDate(today);
+        } else {
+          return formatDate(nextMonth);
+        }
+      };
+
+      // 引落開始日（来月1日）
+      const getPaymentStartDate = () => {
+        return formatDate(nextMonth);
+      };
+
+      // 金額を再計算
+      React.useEffect(() => {
+        if (!plan || !frequency) {
+          setThisMonthFee(0);
+          setNextMonthFee(0);
+          setThisMonthTotal(joinAtTrial ? registrationFee - 1000 : registrationFee);
+          setNextMonthTotal(0);
+          return;
+        }
+        
+        const monthlyFee = feeTable[plan][frequency];
+        const discountedRegistrationFee = joinAtTrial ? registrationFee - 1000 : registrationFee;
+        
+        if (startTiming === "今月から始める") {
+          setThisMonthFee(monthlyFee);
+          setNextMonthFee(monthlyFee);
+          setThisMonthTotal(discountedRegistrationFee + monthlyFee);
+          setNextMonthTotal(monthlyFee);
+        } else {
+          setThisMonthFee(0);
+          setNextMonthFee(monthlyFee);
+          setThisMonthTotal(discountedRegistrationFee);
+          setNextMonthTotal(monthlyFee);
+        }
+      }, [plan, frequency, joinAtTrial, startTiming]);
+
+      // QRコードのプレースホルダーテキストを生成
+      const getQRPlaceholderText = () => {
+        return `${plan}\n${frequency}\nQRコード`;
+      };
+
+      // QRコード画像のパスを生成
+      const getQRImagePath = () => {
+        const planMap = {
+          "フルタイム": "fulltime",
+          "平日フル": "weekday",
+          "いつでも夕方": "evening"
+        };
+        const frequencyMap = {
+          "月2回": "2",
+          "月3回": "3",
+          "月4回": "4",
+          "月6回": "6"
+        };
+        
+        if (plan && frequency) {
+          const datePrefix = "20250603"; // 価格改定時はここを変更
+          return `./images/${datePrefix}-${planMap[plan]}-${frequencyMap[frequency]}.png`;
+        }
+        return "";
+      };
+
+      return (
+        <div className="h-screen flex flex-col bg-gray-100">
+          {/* プロセス表示部分 */}
+          <div className="bg-white shadow-md p-4">
+            <div className="flex justify-center items-center space-x-4">
+              <div className={`px-6 py-3 rounded-lg font-bold ${currentStep === 1 ? 'process-active' : 'process-inactive'}`}>
+                ①プラン決め
+              </div>
+              <div className="text-2xl">→</div>
+              <div className={`px-6 py-3 rounded-lg font-bold ${currentStep === 2 ? 'process-active' : 'process-inactive'}`}>
+                ②確認書
+              </div>
+              <div className="text-2xl">→</div>
+              <div className={`px-6 py-3 rounded-lg font-bold ${currentStep === 3 ? 'process-active' : 'process-inactive'}`}>
+                ③引き落とし登録
+              </div>
+              <div className="text-2xl">→</div>
+              <div className="px-6 py-3 rounded-lg font-bold process-inactive">
+                ④完了
+              </div>
+            </div>
+          </div>
+
+          {/* メインコンテンツ */}
+          <div className="flex-1 p-4 lg:p-8 overflow-auto">
+            <div className="max-w-7xl mx-auto space-y-6">
+              
+              {/* ①プラン決めセクション */}
+              <div className={`p-6 rounded-lg shadow-lg ${currentStep === 1 ? 'active-section' : 'inactive-section'}`}>
+                <h2 className="text-2xl font-bold mb-6 text-center">①プランを決めよう</h2>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* 左側：入力 */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block mb-2 font-medium text-lg">プラン</label>
+                      <select 
+                        className="w-full p-3 border rounded text-lg"
+                        value={plan}
+                        onChange={(e) => setPlan(e.target.value)}
+                        disabled={currentStep !== 1}
+                      >
+                        <option value="" disabled>プランを選んでください</option>
+                        <option value="フルタイム">フルタイム</option>
+                        <option value="平日フル">平日フル</option>
+                        <option value="いつでも夕方">いつでも夕方</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block mb-2 font-medium text-lg">回数</label>
+                      <select 
+                        className="w-full p-3 border rounded text-lg"
+                        value={frequency}
+                        onChange={(e) => setFrequency(e.target.value)}
+                        disabled={currentStep !== 1}
+                      >
+                        <option value="" disabled>回数を選んでください</option>
+                        <option value="月2回">月2回</option>
+                        <option value="月3回">月3回</option>
+                        <option value="月4回">月4回</option>
+                        <option value="月6回">月6回</option>
+                      </select>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input 
+                        type="checkbox" 
+                        id="joinAtTrial" 
+                        className="mr-3 h-5 w-5"
+                        checked={joinAtTrial}
+                        onChange={(e) => setJoinAtTrial(e.target.checked)}
+                        disabled={currentStep !== 1}
+                      />
+                      <label htmlFor="joinAtTrial" className="text-lg">体験時に入会</label>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          id="startThisMonth" 
+                          name="startTiming"
+                          className="mr-3 h-5 w-5"
+                          value="今月から始める"
+                          checked={startTiming === "今月から始める"}
+                          onChange={(e) => setStartTiming(e.target.value)}
+                          disabled={currentStep !== 1}
+                        />
+                        <label htmlFor="startThisMonth" className="text-lg">今月から始める</label>
+                      </div>
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          id="startNextMonth" 
+                          name="startTiming"
+                          className="mr-3 h-5 w-5"
+                          value="来月から始める"
+                          checked={startTiming === "来月から始める"}
+                          onChange={(e) => setStartTiming(e.target.value)}
+                          disabled={currentStep !== 1}
+                        />
+                        <label htmlFor="startNextMonth" className="text-lg">来月から始める</label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 右側：計算結果 */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-xl border-b pb-2">今月の費用</h3>
+                    <div className="flex justify-between items-baseline text-lg">
+                      <span>入会費</span>
+                      <span>{(joinAtTrial ? registrationFee - 1000 : registrationFee).toLocaleString()}<span className="text-sm">円</span></span>
+                    </div>
+                    <div className="flex justify-between items-baseline text-lg">
+                      <span>月謝</span>
+                      <span>{thisMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                    </div>
+                    <div className="flex justify-between items-baseline font-bold text-xl border-t pt-2">
+                      <span>今月合計</span>
+                      <span>{thisMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
+                    </div>
+                    
+                    <h3 className="font-bold text-xl border-b pb-2 mt-6">来月以降の費用</h3>
+                    <div className="flex justify-between items-baseline text-lg">
+                      <span>月謝</span>
+                      <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                    </div>
+                    <div className="flex justify-between items-baseline font-bold text-xl border-t pt-2">
+                      <span>来月合計</span>
+                      <span>{nextMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-8 flex justify-center">
+                  <button 
+                    className="primary-button px-8 py-4 rounded-lg text-xl font-bold disabled:opacity-50"
+                    onClick={() => {
+                      setCurrentStep(2);
+                      setTimeout(() => {
+                        document.getElementById('section-2')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                    disabled={!plan || !frequency}
+                  >
+                    プラン確定（次へ）
+                  </button>
+                </div>
+              </div>
+
+              {/* ②確認書セクション */}
+              <div id="section-2" className={`p-6 rounded-lg shadow-lg ${currentStep === 2 ? 'active-section' : 'inactive-section'}`}>
+                <h2 className="text-2xl font-bold mb-6 text-center">②確認書を書こう</h2>
+                
+                <div className="max-w-2xl mx-auto space-y-6">
+                  <div className="bg-white p-6 rounded-lg space-y-4">
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium text-lg">プラン名：</span>
+                      <span className="text-xl font-bold text-red-600 border-2 border-red-600 rounded-full px-4 py-1">
+                        {plan || "未選択"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium text-lg">回数：</span>
+                      <span className="text-xl font-bold text-red-600 border-2 border-red-600 rounded-full px-4 py-1">
+                        {frequency || "未選択"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium text-lg">利用開始日：</span>
+                      <span className="text-xl font-bold">{getStartDate()}</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium text-lg">引落開始日：</span>
+                      <span className="text-xl font-bold">{getPaymentStartDate()}</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium text-lg">月額：</span>
+                      <span className="text-xl font-bold">
+                        {(plan && frequency) ? feeTable[plan][frequency].toLocaleString() : 0}円
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center text-lg font-medium text-gray-700 mt-6">
+                    ②確認事項と③ご署名まで記入をお願いします
+                  </div>
+                  
+                  <div className="flex justify-center space-x-4 mt-8">
+                    <button 
+                      className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
+                      onClick={() => setCurrentStep(1)}
+                    >
+                      戻る
+                    </button>
+                    <button 
+                      className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
+                      onClick={() => {
+                        setCurrentStep(3);
+                        setTimeout(() => {
+                          document.getElementById('section-3')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                      }}
+                    >
+                      次へ
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* ③引き落とし登録セクション */}
+              <div id="section-3" className={`p-6 rounded-lg shadow-lg ${currentStep === 3 ? 'active-section' : 'inactive-section'}`}>
+                <h2 className="text-2xl font-bold mb-6 text-center">③引き落とし登録</h2>
+                
+                <div className="flex flex-col items-center space-y-6">
+                  {plan && frequency ? (
+                    <img 
+                      src={getQRImagePath()} 
+                      alt={`${plan} ${frequency} QRコード`}
+                      style={{ width: "200px", height: "200px", border: "1px solid #ddd" }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div 
+                    className="qr-placeholder" 
+                    style={{ display: plan && frequency ? 'none' : 'flex' }}
+                  >
+                    <div className="text-center">
+                      <p className="text-sm">{getQRPlaceholderText()}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="text-xl font-medium">
+                    ご自身のスマホで👆のQRコードを読み取ってね！
+                  </div>
+                  
+                  <div className="flex space-x-4 mt-8">
+                    <button 
+                      className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
+                      onClick={() => setCurrentStep(2)}
+                    >
+                      戻る
+                    </button>
+                    <button 
+                      className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
+                      onClick={() => window.location.href = 'https://example.com/payment-guide'}
+                    >
+                      次へ（操作方法）
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // コンポーネントをレンダリング
+    ReactDOM.render(
+      <App />,
+      document.getElementById('app-container')
+    );
+  </script>
+</body>
+</html>
