@@ -170,7 +170,9 @@
         
         if (plan && frequency) {
           const datePrefix = "20250603"; // 価格改定時はここを変更
-          return `./images/${datePrefix}-${planMap[plan]}-${frequencyMap[frequency]}.png`;
+          const path = `./images/${datePrefix}-${planMap[plan]}-${frequencyMap[frequency]}.png`;
+          console.log("画像パス:", path); // デバッグ用
+          return path;
         }
         return "";
       };
