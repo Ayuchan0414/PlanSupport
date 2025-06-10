@@ -47,8 +47,8 @@
       background-color: #d66d0a;
     }
     .qr-placeholder {
-      width: 200px;
-      height: 200px;
+      width: 300px;
+      height: 300px;
       border: 2px dashed #666;
       display: flex;
       align-items: center;
@@ -399,7 +399,12 @@
                     <img 
                       src={getQRImagePath()} 
                       alt={`${plan} ${frequency} QRコード`}
-                      style={{ width: "200px", height: "200px", border: "1px solid #ddd" }}
+                      style={{ 
+                        width: "300px", 
+                        height: "300px", 
+                        objectFit: "contain",
+                        border: "1px solid #ddd" 
+                      }}
                       onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.nextSibling.style.display = 'flex';
@@ -408,7 +413,11 @@
                   ) : null}
                   <div 
                     className="qr-placeholder" 
-                    style={{ display: plan && frequency ? 'none' : 'flex' }}
+                    style={{ 
+                      display: plan && frequency ? 'none' : 'flex',
+                      width: "300px",
+                      height: "300px"
+                    }}
                   >
                     <div className="text-center">
                       <p className="text-sm">{getQRPlaceholderText()}</p>
@@ -428,7 +437,7 @@
                     </button>
                     <button 
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
-                      onClick={() => window.location.href = 'https://docs.google.com/presentation/d/1Gs0pot3LOPsm4jWxTZMrTJTfiLsSv0snkms8wMlmvyc/edit?usp=sharing'}
+                      onClick={() => window.location.href = 'https://docs.google.com/presentation/d/1Gs0pot3LOPsm4jWxTZMrTJTfiLsSv0snkms8wMlmvyc/present?slide=id.g35e05055ccb_2_27#slide=id.g35e05055ccb_2_27'}
                     >
                       次へ（操作方法）
                     </button>
