@@ -398,7 +398,7 @@
                       <span>{thisMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
                     </div>
                     
-                    <h3 className={`font-bold text-xl border-b pb-2 ${changePlanNextMonth ? 'mt-40' : 'mt-6'}`}>来月以降の費用</h3>
+                    <h3 className={`font-bold text-xl border-b pb-2 ${changePlanNextMonth && startTiming === "今月から始める" ? 'mt-32' : 'mt-6'}`}>来月以降の費用</h3>
                     <div className="flex justify-between items-baseline text-lg">
                       <span>月謝</span>
                       <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
@@ -502,6 +502,7 @@
                     <button 
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
+                        console.log('確認書の次へボタンクリック, showPlanChangeForm:', showPlanChangeForm);
                         if (showPlanChangeForm) {
                           setCurrentStep(2.5);
                           setTimeout(() => {
@@ -521,10 +522,10 @@
                 </div>
               </div>
 
-              {/* ②-2プラン変更届セクション */}
-              {showPlanChangeForm && (
-                <div id="section-2-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 2.5 ? 'active-section' : 'inactive-section'}`}>
+              {/* ②-2プラン変更届セクション - 常に表示してテスト */}
+              <div id="section-2-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 2.5 ? 'active-section' : 'inactive-section'}`}>
                   <h2 className="text-2xl font-bold mb-6 text-center">プラン変更届を書こう</h2>
+                  {console.log('プラン変更届表示中, currentStep:', currentStep, 'showPlanChangeForm:', showPlanChangeForm)}
                   
                   <div className="max-w-2xl mx-auto space-y-6">
                     <div className="text-gray-700 space-y-2 mb-4">
