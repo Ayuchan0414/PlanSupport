@@ -502,8 +502,12 @@
                     <button 
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
-                        console.log('確認書の次へボタンクリック, showPlanChangeForm:', showPlanChangeForm);
-                        if (showPlanChangeForm) {
+                        console.log('確認書の次へボタンクリック');
+                        // プラン変更があるかチェック
+                        const hasChange = changePlanNextMonth && startTiming === "今月から始める" && plan && frequency && nextMonthPlan && nextMonthFrequency;
+                        console.log('プラン変更あり？:', hasChange);
+                        
+                        if (hasChange) {
                           setCurrentStep(2.5);
                           setTimeout(() => {
                             document.getElementById('section-2-5')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
