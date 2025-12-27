@@ -4,12 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>料金計算・契約フォーム</title>
-  <!-- React関連のライブラリ -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
   <style>
@@ -46,6 +44,13 @@
     .primary-button:hover {
       background-color: #d66d0a;
     }
+    .secondary-button {
+      background-color: #6B7280; /* Gray-500 */
+      color: white;
+    }
+    .secondary-button:hover {
+      background-color: #4B5563; /* Gray-600 */
+    }
     .qr-placeholder {
       width: 300px;
       height: 300px;
@@ -55,6 +60,28 @@
       justify-content: center;
       background-color: #f0f0f0;
     }
+    /* モーダル用のスタイル */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background-color: white;
+      padding: 2rem;
+      border-radius: 0.5rem;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -62,25 +89,25 @@
   
   <script type="text/babel">
     const App = () => {
-      // 料金プラン設定
+     // 料金プラン設定
       const feeTable = {
         "フルタイム": {
-          "月2回": 10980,
-          "月3回": 15470,
-          "月4回": 19960,
-          "月6回": 29940
+          "月2回": 11480,
+          "月3回": 16220,
+          "月4回": 20960,
+          "月6回": 31440
         },
         "平日フル": {
-          "月2回": 9800,
-          "月3回": 13700,
-          "月4回": 17600,
-          "月6回": 26400
+          "月2回": 10300,
+          "月3回": 14450,
+          "月4回": 18600,
+          "月6回": 27900
         },
         "いつでも夕方": {
-          "月2回": 8690,
-          "月3回": 12035,
-          "月4回": 15380,
-          "月6回": 23070
+          "月2回": 9190,
+          "月3回": 12780,
+          "月4回": 16380,
+          "月6回": 24570
         }
       };
 
@@ -90,10 +117,22 @@
       const [frequency, setFrequency] = React.useState("");
       const [nextMonthPlan, setNextMonthPlan] = React.useState("");
       const [nextMonthFrequency, setNextMonthFrequency] = React.useState("");
+      
       const [joinAtTrial, setJoinAtTrial] = React.useState(true);
+      
+      // クーポン関連の状態
+      const [couponCode, setCouponCode] = React.useState("");
+      const [applyCoupon, setApplyCoupon] = React.useState(false);
+
       const [startTiming, setStartTiming] = React.useState("今月から始める");
       const [changePlanNextMonth, setChangePlanNextMonth] = React.useState(false);
       const [showPlanChangeForm, setShowPlanChangeForm] = React.useState(false);
+      
+      // モーダル管理用
+      const [showDeadlineModal, setShowDeadlineModal] = React.useState(false);
+      const [deadlineMessage, setDeadlineMessage] = React.useState("");
+      // 期限切れによる変更適用遅延フラグ
+      const [isDelayedChange, setIsDelayedChange] = React.useState(false);
       
       // 金額計算
       const [thisMonthFee, setThisMonthFee] = React.useState(0);
@@ -104,7 +143,14 @@
 
       // 日付関連
       const today = new Date();
-      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      // today.setDate(15); // ★テスト用：ここを有効にすると15日として動作確認できます
+
+      // 適用月（来月または再来月）の計算
+      const targetMonthOffset = isDelayedChange ? 2 : 1;
+      const nextMonth = new Date(today.getFullYear(), today.getMonth() + targetMonthOffset, 1);
+      
+      // UI表示用のラベル（「来月」または「○月以降」）
+      const nextMonthLabel = isDelayedChange ? `${nextMonth.getMonth() + 1}月以降` : "来月";
       
       const formatDate = (date) => {
         const year = date.getFullYear();
@@ -118,60 +164,99 @@
         if (startTiming === "今月から始める") {
           return formatDate(today);
         } else {
-          return formatDate(nextMonth);
+          // 「来月から始める」の場合、純粋な来月1日を返す
+          const pureNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+          return formatDate(pureNextMonth);
         }
       };
 
-      // 引落開始日（来月1日）
+      // 引落開始日（常にカレンダー上の来月1日）
       const getPaymentStartDate = () => {
-        return formatDate(nextMonth);
+        const paymentDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        return formatDate(paymentDate);
       };
+
+      // プラン変更チェックボックスがオフになったら遅延フラグもリセット
+      React.useEffect(() => {
+        if (!changePlanNextMonth) {
+          setIsDelayedChange(false);
+        }
+      }, [changePlanNextMonth]);
+
+      // クーポンコードの監視
+      React.useEffect(() => {
+        if (couponCode === "ayuiida2026") {
+          setApplyCoupon(true);
+        } else {
+          setApplyCoupon(false);
+        }
+      }, [couponCode]);
 
       // 金額を再計算
       React.useEffect(() => {
+        let currentRegistrationFee;
+        if (applyCoupon) {
+          currentRegistrationFee = 3950;
+        } else {
+          currentRegistrationFee = joinAtTrial ? registrationFee - 1000 : registrationFee;
+        }
+
         if (!plan || !frequency) {
           setThisMonthFee(0);
           setNextMonthFee(0);
-          setThisMonthTotal(joinAtTrial ? registrationFee - 1000 : registrationFee);
+          setThisMonthTotal(currentRegistrationFee);
           setNextMonthTotal(0);
           return;
         }
         
         const monthlyFee = feeTable[plan][frequency];
-        const discountedRegistrationFee = joinAtTrial ? registrationFee - 1000 : registrationFee;
         
         if (startTiming === "今月から始める") {
           setThisMonthFee(monthlyFee);
-          // 来月のプランが選択されている場合はそちらを使用
           if (changePlanNextMonth && nextMonthPlan && nextMonthFrequency) {
             setNextMonthFee(feeTable[nextMonthPlan][nextMonthFrequency]);
           } else {
             setNextMonthFee(monthlyFee);
           }
-          setThisMonthTotal(discountedRegistrationFee + monthlyFee);
+          setThisMonthTotal(currentRegistrationFee + monthlyFee);
         } else {
           setThisMonthFee(0);
           setNextMonthFee(monthlyFee);
-          setThisMonthTotal(discountedRegistrationFee);
+          setThisMonthTotal(currentRegistrationFee);
         }
         
-        // 来月以降の合計は月謝のみ
         setNextMonthTotal(nextMonthFee);
-      }, [plan, frequency, joinAtTrial, startTiming, changePlanNextMonth, nextMonthPlan, nextMonthFrequency, nextMonthFee]);
+      }, [plan, frequency, joinAtTrial, applyCoupon, startTiming, changePlanNextMonth, nextMonthPlan, nextMonthFrequency, nextMonthFee, registrationFee]);
 
-      // ③お会計セクションに到達時に音を鳴らす
+      // 音声再生
       React.useEffect(() => {
         if (currentStep === 3) {
-          // MP3ファイルを再生
           const audio = new Audio('./呼び出し音.mp3');
-          audio.volume = 0.5; // 音量調整（0〜1）
+          audio.volume = 0.5;
           audio.play().catch(error => {
             console.log('音声の再生に失敗しました:', error);
           });
         }
       }, [currentStep]);
 
-      // QRコード画像のパスを生成
+      // QRコードに表示すべきプランと回数を決定するロジック
+      const getQRTarget = () => {
+        let targetPlan = plan;
+        let targetFrequency = frequency;
+
+        if (changePlanNextMonth) {
+          // 本日が10日以前なら「来月のプラン（新プラン）」を表示
+          if (today.getDate() <= 10) {
+            targetPlan = nextMonthPlan;
+            targetFrequency = nextMonthFrequency;
+          }
+          // 本日が11日以降なら「今月のプラン（旧プラン）」のまま
+        }
+        
+        return { targetPlan, targetFrequency };
+      };
+
+      // QRコード画像パス生成
       const getQRImagePath = () => {
         const planMap = {
           "フルタイム": "fulltime",
@@ -185,25 +270,37 @@
           "月6回": "6"
         };
         
-        // 来月のプランが設定されている場合はそちらを使用
-        const targetPlan = (changePlanNextMonth && nextMonthPlan) ? nextMonthPlan : plan;
-        const targetFrequency = (changePlanNextMonth && nextMonthFrequency) ? nextMonthFrequency : frequency;
+        const { targetPlan, targetFrequency } = getQRTarget();
         
         if (targetPlan && targetFrequency) {
-          const datePrefix = "20250603"; // 価格改定時はここを変更
+          const datePrefix = "20260101"; //月謝を変更する場合はここを変える
           const path = `./images/${datePrefix}-${planMap[targetPlan]}-${frequencyMap[targetFrequency]}.png`;
-          console.log("画像パス:", path); // デバッグ用
           return path;
         }
         return "";
       };
 
-      // QRコードのプレースホルダーテキストを生成
+      // QRコードプレースホルダーテキスト生成
       const getQRPlaceholderText = () => {
-        const targetPlan = (changePlanNextMonth && nextMonthPlan) ? nextMonthPlan : plan;
-        const targetFrequency = (changePlanNextMonth && nextMonthFrequency) ? nextMonthFrequency : frequency;
+        const { targetPlan, targetFrequency } = getQRTarget();
         return `${targetPlan}\n${targetFrequency}\nQRコード`;
       };
+
+      const getDisplayRegistrationFee = () => {
+        if (applyCoupon) return 3950;
+        return joinAtTrial ? registrationFee - 1000 : registrationFee;
+      };
+
+      // 次のステップへ進む処理（共通化）
+      const proceedToNextStep = () => {
+        setCurrentStep(2);
+        setTimeout(() => {
+          document.getElementById('section-2')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      };
+
+      // レンダリング用の変数準備（QRコード表示判定用）
+      const { targetPlan: qrPlan, targetFrequency: qrFreq } = getQRTarget();
 
       return (
         <div className="h-screen flex flex-col bg-gray-100">
@@ -251,7 +348,6 @@
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* 左側：入力 */}
                   <div className="space-y-4">
-                    {/* 今月のプラン選択エリア */}
                     <div className={changePlanNextMonth ? 'bg-white p-4 rounded-lg' : ''}>
                       <div>
                         <label className="block mb-2 font-medium text-lg">
@@ -300,8 +396,27 @@
                       />
                       <label htmlFor="joinAtTrial" className="text-lg">体験時に入会</label>
                     </div>
+
+                    {/* クーポンコード入力エリア */}
+                    <div className="mt-2">
+                      <label className="block mb-2 font-medium text-lg">クーポンコード</label>
+                      <input
+                        type="text"
+                        className="w-full p-3 border rounded text-lg"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        placeholder="お持ちの方は入力してください"
+                        disabled={currentStep !== 1}
+                      />
+                      {couponCode !== "" && !applyCoupon && (
+                        <p className="text-red-600 font-bold mt-1">コードが間違っています</p>
+                      )}
+                      {applyCoupon && (
+                        <p className="text-green-600 font-bold mt-1">クーポンを適用しました！</p>
+                      )}
+                    </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-3 mt-4">
                       <div className="flex items-center">
                         <input 
                           type="radio" 
@@ -345,11 +460,10 @@
                       </div>
                     </div>
                     
-                    {/* 来月のプラン選択エリア */}
                     {changePlanNextMonth && startTiming === "今月から始める" && (
                       <div className="bg-white p-4 rounded-lg mt-4">
                         <div>
-                          <label className="block mb-2 font-medium text-lg">来月のプラン</label>
+                          <label className="block mb-2 font-medium text-lg">{nextMonthLabel}のプラン</label>
                           <select 
                             className="w-full p-3 border rounded text-lg"
                             value={nextMonthPlan}
@@ -364,7 +478,7 @@
                         </div>
                         
                         <div className="mt-4">
-                          <label className="block mb-2 font-medium text-lg">来月の回数</label>
+                          <label className="block mb-2 font-medium text-lg">{nextMonthLabel}の回数</label>
                           <select 
                             className="w-full p-3 border rounded text-lg"
                             value={nextMonthFrequency}
@@ -387,7 +501,10 @@
                     <h3 className="font-bold text-xl border-b pb-2">今月の費用</h3>
                     <div className="flex justify-between items-baseline text-lg">
                       <span>入会費</span>
-                      <span>{(joinAtTrial ? registrationFee - 1000 : registrationFee).toLocaleString()}<span className="text-sm">円</span></span>
+                      <span>
+                        {getDisplayRegistrationFee().toLocaleString()}<span className="text-sm">円</span>
+                        {applyCoupon && <span className="text-red-600 font-bold ml-2 text-sm">2000円引き！</span>}
+                      </span>
                     </div>
                     <div className="flex justify-between items-baseline text-lg">
                       <span>月謝</span>
@@ -398,13 +515,15 @@
                       <span>{thisMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
                     </div>
                     
-                    <h3 className={`font-bold text-xl border-b pb-2 ${changePlanNextMonth && startTiming === "今月から始める" ? 'mt-32' : 'mt-6'}`}>来月以降の費用</h3>
+                    <h3 className={`font-bold text-xl border-b pb-2 ${changePlanNextMonth && startTiming === "今月から始める" ? 'mt-32' : 'mt-6'}`}>
+                      {nextMonthLabel}の費用
+                    </h3>
                     <div className="flex justify-between items-baseline text-lg">
                       <span>月謝</span>
                       <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
                     </div>
                     <div className="flex justify-between items-baseline font-bold text-xl border-t pt-2">
-                      <span>来月合計</span>
+                      <span>{nextMonthLabel}合計</span>
                       <span>{nextMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
                     </div>
                   </div>
@@ -414,10 +533,13 @@
                   <button 
                     className="primary-button px-8 py-4 rounded-lg text-xl font-bold disabled:opacity-50"
                     onClick={() => {
-                      setCurrentStep(2);
-                      setTimeout(() => {
-                        document.getElementById('section-2')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }, 100);
+                      if (changePlanNextMonth && today.getDate() >= 11 && !isDelayedChange) {
+                        const targetMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1).getMonth() + 1;
+                        setDeadlineMessage(`本日はプラン変更期限の10日を過ぎています。プラン変更の適用は${targetMonth}月になります`);
+                        setShowDeadlineModal(true);
+                        return;
+                      }
+                      proceedToNextStep();
                     }}
                     disabled={!plan || !frequency || (changePlanNextMonth && (!nextMonthPlan || !nextMonthFrequency))}
                   >
@@ -466,7 +588,7 @@
                             </span>
                           </div>
                           <div className="flex items-center space-x-4">
-                            <span className="font-medium text-lg">月謝（来月以降）：</span>
+                            <span className="font-medium text-lg">月謝（{nextMonthLabel}）：</span>
                             <span className="text-xl font-bold">
                               {nextMonthFee.toLocaleString()}円
                             </span>
@@ -488,9 +610,11 @@
                   </div>
                   
                   <div className="flex justify-between mt-8">
+                    {/* 【修正】戻るボタンでisDelayedChangeをリセット */}
                     <button 
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
+                        setIsDelayedChange(false);
                         setCurrentStep(1);
                         setTimeout(() => {
                           document.getElementById('section-1')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -502,11 +626,7 @@
                     <button 
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
-                        console.log('確認書の次へボタンクリック');
-                        // プラン変更があるかチェック
                         const hasChange = changePlanNextMonth && startTiming === "今月から始める" && plan && frequency && nextMonthPlan && nextMonthFrequency;
-                        console.log('プラン変更あり？:', hasChange);
-                        
                         if (hasChange) {
                           setCurrentStep(2.5);
                           setTimeout(() => {
@@ -526,10 +646,9 @@
                 </div>
               </div>
 
-              {/* ②-2プラン変更届セクション - 常に表示してテスト */}
+              {/* ②-2プラン変更届セクション */}
               <div id="section-2-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 2.5 ? 'active-section' : 'inactive-section'}`}>
                   <h2 className="text-2xl font-bold mb-6 text-center">プラン変更届を書こう</h2>
-                  {console.log('プラン変更届表示中, currentStep:', currentStep, 'showPlanChangeForm:', showPlanChangeForm)}
                   
                   <div className="max-w-2xl mx-auto space-y-6">
                     <div className="text-gray-700 space-y-2 mb-4">
@@ -552,7 +671,7 @@
                         </div>
                         
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">変更後のプラン：</span>
+                          <span className="font-medium text-lg">変更後のプラン：</span>
                           <span className="font-bold">{nextMonthPlan} {nextMonthFrequency}</span>
                         </div>
                         
@@ -589,7 +708,6 @@
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* ③お会計セクション */}
               <div id="section-3" className={`p-6 rounded-lg shadow-lg ${currentStep === 3 ? 'active-section' : 'inactive-section'}`}>
@@ -601,7 +719,10 @@
                     <h3 className="font-bold text-xl border-b pb-2">今月の費用</h3>
                     <div className="flex justify-between items-baseline text-lg">
                       <span>入会費</span>
-                      <span>{(joinAtTrial ? registrationFee - 1000 : registrationFee).toLocaleString()}<span className="text-sm">円</span></span>
+                      <span>
+                         {getDisplayRegistrationFee().toLocaleString()}<span className="text-sm">円</span>
+                         {applyCoupon && <span className="text-red-600 font-bold ml-2 text-sm">2000円引き！</span>}
+                      </span>
                     </div>
                     <div className="flex justify-between items-baseline text-lg">
                       <span>月謝</span>
@@ -653,10 +774,10 @@
                 <h2 className="text-2xl font-bold mb-6 text-center">④来月の引き落とし登録</h2>
                 
                 <div className="flex flex-col items-center space-y-6">
-                  {(changePlanNextMonth ? (nextMonthPlan && nextMonthFrequency) : (plan && frequency)) ? (
+                  {(qrPlan && qrFreq) ? (
                     <img 
                       src={getQRImagePath()} 
-                      alt={`${changePlanNextMonth ? nextMonthPlan : plan} ${changePlanNextMonth ? nextMonthFrequency : frequency} QRコード`}
+                      alt={`${qrPlan} ${qrFreq} QRコード`}
                       style={{ 
                         width: "300px", 
                         height: "300px", 
@@ -673,7 +794,7 @@
                   <div 
                     className="qr-placeholder" 
                     style={{ 
-                      display: (changePlanNextMonth ? (nextMonthPlan && nextMonthFrequency) : (plan && frequency)) ? 'none' : 'flex',
+                      display: (qrPlan && qrFreq) ? 'none' : 'flex',
                       width: "300px",
                       height: "300px"
                     }}
@@ -687,7 +808,8 @@
                     ご自身のスマホで👆のQRコードを読み取ってね！
                   </div>
                   
-                  <div className="flex justify-between mt-8">
+                  {/* 【修正】ボタンエリアの最大幅を設定して他のセクションと合わせる */}
+                  <div className="flex justify-between mt-8 w-full max-w-2xl">
                     <button 
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
@@ -701,7 +823,7 @@
                     </button>
                     <button 
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
-                      onClick={() => window.location.href = 'https://docs.google.com/presentation/d/1Gs0pot3LOPsm4jWxTZMrTJTfiLsSv0snkms8wMlmvyc/present?slide=id.g35e05055ccb_2_27#slide=id.g35e05055ccb_2_27'}
+                      onClick={() => window.open('https://docs.google.com/presentation/d/1Gs0pot3LOPsm4jWxTZMrTJTfiLsSv0snkms8wMlmvyc/present?slide=id.g35e05055ccb_2_27#slide=id.g35e05055ccb_2_27', '_blank')}
                     >
                       次へ（操作方法）
                     </button>
@@ -711,6 +833,40 @@
               
             </div>
           </div>
+
+          {/* モーダル表示部分 */}
+          {showDeadlineModal && (
+            <div className="modal-overlay">
+              <div className="modal-content">
+                <p className="text-xl font-bold text-red-600 mb-4">確認</p>
+                <p className="text-lg mb-8 font-bold">{deadlineMessage}</p>
+                <div className="flex justify-center space-x-6">
+                  {/* いいえボタン */}
+                  <button
+                    className="secondary-button px-10 py-3 rounded-lg text-lg font-bold"
+                    onClick={() => {
+                      setChangePlanNextMonth(false);
+                      setShowDeadlineModal(false);
+                    }}
+                  >
+                    いいえ
+                  </button>
+                  {/* はいボタン */}
+                  <button
+                    className="primary-button px-10 py-3 rounded-lg text-lg font-bold"
+                    onClick={() => {
+                      setIsDelayedChange(true);
+                      setShowDeadlineModal(false);
+                      proceedToNextStep();
+                    }}
+                  >
+                    はい
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       );
     };
