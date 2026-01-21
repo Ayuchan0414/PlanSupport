@@ -89,7 +89,7 @@
   
   <script type="text/babel">
     const App = () => {
-     // 料金プラン設定
+      // 料金プラン設定
       const feeTable = {
         "フルタイム": {
           "月2回": 11480,
@@ -120,10 +120,6 @@
       
       const [joinAtTrial, setJoinAtTrial] = React.useState(true);
       
-      // クーポン関連の状態
-      const [couponCode, setCouponCode] = React.useState("");
-      const [applyCoupon, setApplyCoupon] = React.useState(false);
-
       const [startTiming, setStartTiming] = React.useState("今月から始める");
       const [changePlanNextMonth, setChangePlanNextMonth] = React.useState(false);
       const [showPlanChangeForm, setShowPlanChangeForm] = React.useState(false);
@@ -143,7 +139,7 @@
 
       // 日付関連
       const today = new Date();
-      // today.setDate(15); // ★テスト用：ここを有効にすると15日として動作確認できます
+      // today.setDate(15); // ★テスト用：15日として動作確認する場合はコメント解除
 
       // 適用月（来月または再来月）の計算
       const targetMonthOffset = isDelayedChange ? 2 : 1;
@@ -183,23 +179,9 @@
         }
       }, [changePlanNextMonth]);
 
-      // クーポンコードの監視
-      React.useEffect(() => {
-        if (couponCode === "ayuiida2026") {
-          setApplyCoupon(true);
-        } else {
-          setApplyCoupon(false);
-        }
-      }, [couponCode]);
-
       // 金額を再計算
       React.useEffect(() => {
-        let currentRegistrationFee;
-        if (applyCoupon) {
-          currentRegistrationFee = 3950;
-        } else {
-          currentRegistrationFee = joinAtTrial ? registrationFee - 1000 : registrationFee;
-        }
+        const currentRegistrationFee = joinAtTrial ? registrationFee - 1000 : registrationFee;
 
         if (!plan || !frequency) {
           setThisMonthFee(0);
@@ -226,7 +208,7 @@
         }
         
         setNextMonthTotal(nextMonthFee);
-      }, [plan, frequency, joinAtTrial, applyCoupon, startTiming, changePlanNextMonth, nextMonthPlan, nextMonthFrequency, nextMonthFee, registrationFee]);
+      }, [plan, frequency, joinAtTrial, startTiming, changePlanNextMonth, nextMonthPlan, nextMonthFrequency, nextMonthFee, registrationFee]);
 
       // 音声再生
       React.useEffect(() => {
@@ -286,8 +268,8 @@
         return `${targetPlan}\n${targetFrequency}\nQRコード`;
       };
 
+      // 入会金の表示金額を取得
       const getDisplayRegistrationFee = () => {
-        if (applyCoupon) return 3950;
         return joinAtTrial ? registrationFee - 1000 : registrationFee;
       };
 
@@ -396,25 +378,6 @@
                       />
                       <label htmlFor="joinAtTrial" className="text-lg">体験時に入会</label>
                     </div>
-
-                    {/* クーポンコード入力エリア */}
-                    <div className="mt-2">
-                      <label className="block mb-2 font-medium text-lg">クーポンコード</label>
-                      <input
-                        type="text"
-                        className="w-full p-3 border rounded text-lg"
-                        value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value)}
-                        placeholder="お持ちの方は入力してください"
-                        disabled={currentStep !== 1}
-                      />
-                      {couponCode !== "" && !applyCoupon && (
-                        <p className="text-red-600 font-bold mt-1">コードが間違っています</p>
-                      )}
-                      {applyCoupon && (
-                        <p className="text-green-600 font-bold mt-1">クーポンを適用しました！</p>
-                      )}
-                    </div>
                     
                     <div className="space-y-3 mt-4">
                       <div className="flex items-center">
@@ -453,7 +416,14 @@
                           className="mr-3 h-5 w-5"
                           value="来月から始める"
                           checked={startTiming === "来月から始める"}
-                          onChange={(e) => setStartTiming(e.target.value)}
+                          onChange={(e) => {
+                            setStartTiming(e.target.value);
+                            // 【修正】来月から始めるを選んだら、プラン変更系のフラグをリセット
+                            if (e.target.value === "来月から始める") {
+                              setChangePlanNextMonth(false);
+                              setIsDelayedChange(false);
+                            }
+                          }}
                           disabled={currentStep !== 1}
                         />
                         <label htmlFor="startNextMonth" className="text-lg">来月から始める</label>
@@ -503,7 +473,6 @@
                       <span>入会費</span>
                       <span>
                         {getDisplayRegistrationFee().toLocaleString()}<span className="text-sm">円</span>
-                        {applyCoupon && <span className="text-red-600 font-bold ml-2 text-sm">2000円引き！</span>}
                       </span>
                     </div>
                     <div className="flex justify-between items-baseline text-lg">
@@ -533,7 +502,8 @@
                   <button 
                     className="primary-button px-8 py-4 rounded-lg text-xl font-bold disabled:opacity-50"
                     onClick={() => {
-                      if (changePlanNextMonth && today.getDate() >= 11 && !isDelayedChange) {
+                      // 【修正】今月から始める かつ プラン変更あり の場合のみ10日チェック
+                      if (startTiming === "今月から始める" && changePlanNextMonth && today.getDate() >= 11 && !isDelayedChange) {
                         const targetMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1).getMonth() + 1;
                         setDeadlineMessage(`本日はプラン変更期限の10日を過ぎています。プラン変更の適用は${targetMonth}月になります`);
                         setShowDeadlineModal(true);
@@ -610,7 +580,6 @@
                   </div>
                   
                   <div className="flex justify-between mt-8">
-                    {/* 【修正】戻るボタンでisDelayedChangeをリセット */}
                     <button 
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
@@ -721,7 +690,6 @@
                       <span>入会費</span>
                       <span>
                          {getDisplayRegistrationFee().toLocaleString()}<span className="text-sm">円</span>
-                         {applyCoupon && <span className="text-red-600 font-bold ml-2 text-sm">2000円引き！</span>}
                       </span>
                     </div>
                     <div className="flex justify-between items-baseline text-lg">
@@ -808,7 +776,6 @@
                     ご自身のスマホで👆のQRコードを読み取ってね！
                   </div>
                   
-                  {/* 【修正】ボタンエリアの最大幅を設定して他のセクションと合わせる */}
                   <div className="flex justify-between mt-8 w-full max-w-2xl">
                     <button 
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
