@@ -4,11 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>料金計算・契約フォーム</title>
-  <script src="./libs/react.development.js"></script>
-  <script src="./libs/react-dom.development.js"></script>
-  <script src="./libs/babel.min.js"></script>
+  <!-- React関連のライブラリ -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <script src="./libs/tailwind.min.js"></script>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
   
   <style>
     body {
@@ -93,6 +95,19 @@
   <div id="app-container"></div>
   
   <script type="text/babel">
+    // 音声ファイルを事前に読み込んでおくフック（再生時の遅延を防ぐため）
+    const usePreloadedAudio = (src, volume = 0.5) => {
+      const ref = React.useRef(null);
+      React.useEffect(() => {
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        audio.volume = volume;
+        audio.load();
+        ref.current = audio;
+      }, [src]);
+      return ref;
+    };
+
     const App = () => {
       // 料金プラン設定
       const feeTable = {
@@ -117,8 +132,9 @@
       };
 
       // 状態管理
-      // currentStep: 1=プラン決め, 2=受講者情報, 2.2=確認事項, 2.3=ご署名, 2.4=アンケート, 2.5=プラン変更届, 3=お会計, 4=引落登録, 4.2=自宅登録案内, 4.5=振替口座登録, 4.8=Web口座振替, 5=完了
       const [currentStep, setCurrentStep] = React.useState(1);
+      // 起動直後はブラウザの自動再生制限で音声が鳴らないため、タップ操作を挟むためのフラグ
+      const [hasStarted, setHasStarted] = React.useState(false);
       const [plan, setPlan] = React.useState("");
       const [frequency, setFrequency] = React.useState("");
       const [nextMonthPlan, setNextMonthPlan] = React.useState("");
@@ -133,6 +149,9 @@
       // モーダル・遅延適用管理用
       const [showLateModal, setShowLateModal] = React.useState(false);
       const [isDelayedChange, setIsDelayedChange] = React.useState(false);
+
+      // ④のどの画面から⑤に進んだかを記憶する用
+      const [lastStep4, setLastStep4] = React.useState(4.5);
       
       // 金額計算
       const [thisMonthFee, setThisMonthFee] = React.useState(0);
@@ -231,29 +250,142 @@
         }
       }, [plan, frequency, joinAtTrial, startTiming, changePlanNextMonth, nextMonthPlan, nextMonthFrequency, isDelayedChange, registrationFee]);
 
-      // 音声再生（お会計画面が表示されたときのみ鳴らす）
-      React.useEffect(() => {
-        if (currentStep === 3) {
-          const audio = new Audio('./呼び出し音.mp3');
-          audio.volume = 0.5;
-          audio.play().catch(error => {
+      // 各エリアの音声
+      const planAudioRef = usePreloadedAudio('./音声プランを決めよう.wav');
+      const confirmDocAudioRef = usePreloadedAudio('./音声確認書を書こう.wav');
+      const termsAudioRef = usePreloadedAudio('./音声受講規約.wav');
+      const soccerAudioRef = usePreloadedAudio('./音声サッカー.wav');
+      const teddyAudioRef = usePreloadedAudio('./音声テディ.wav');
+      const callAudioRef = usePreloadedAudio('./呼び出し音.mp3');
+      const kaikeiAudioRef = usePreloadedAudio('./音声お会計.wav');
+      const cheerAudioRef = usePreloadedAudio('./歓声と拍手1.mp3');
+      const planChangeDeadlineAudioRef = usePreloadedAudio('./プラン変更事務処理期限.wav');
+      const cashCardAudioRef = usePreloadedAudio('./銀行のキャッシュカードをご用意ください.wav');
+      const accountHomeAudioRef = usePreloadedAudio('./④ご自宅での口座振替のご案内.wav');
+      const accountRegisterAudioRef = usePreloadedAudio('./④引き落とし登録 振替口座登録.wav');
+      const accountWebAudioRef = usePreloadedAudio('./④別の方法(Web)での口座振替のご案内.wav');
+      const reservationAudioRef = usePreloadedAudio('./⑤体験のご予約は？.wav');
+      const planChangeFormAudioRef = usePreloadedAudio('./プラン変更届を書こう.wav');
+
+      // ボタン効果音
+      const decisionClickAudioRef = usePreloadedAudio('./決定ボタンを押す3.mp3', 0.4);
+      const cancelClickAudioRef = usePreloadedAudio('./キャンセル6.mp3', 0.4);
+
+      // エリアのナレーション音声一覧（新しいナレーションを鳴らす前に、前のナレーションを止めるため）
+      // ※ボタンのクリック音はここに含めない（クリック音がナレーションに止められて聞こえなくなるのを防ぐため、別チャンネル扱いにする）
+      const areaAudioRefs = [
+        planAudioRef, confirmDocAudioRef, termsAudioRef, soccerAudioRef, teddyAudioRef,
+        callAudioRef, kaikeiAudioRef, cheerAudioRef, planChangeDeadlineAudioRef,
+        cashCardAudioRef, accountHomeAudioRef, accountRegisterAudioRef, accountWebAudioRef, reservationAudioRef,
+        planChangeFormAudioRef
+      ];
+
+      const stopAreaAudio = () => {
+        areaAudioRefs.forEach((ref) => {
+          if (ref.current) {
+            ref.current.pause();
+            ref.current.currentTime = 0;
+          }
+        });
+      };
+
+      // エリアのナレーション再生（前のナレーションを止めてから鳴らす）
+      const playAreaAudio = (ref) => {
+        stopAreaAudio();
+        if (ref.current) {
+          ref.current.currentTime = 0;
+          ref.current.play().catch(error => {
             console.log('音声の再生に失敗しました:', error);
           });
         }
+      };
+
+      // ボタンのクリック音再生（ナレーションとは独立して最後まで鳴らす）
+      const playClickAudio = (ref) => {
+        if (ref.current) {
+          ref.current.currentTime = 0;
+          ref.current.play().catch(error => {
+            console.log('音声の再生に失敗しました:', error);
+          });
+        }
+      };
+
+      // ボタン押下時の効果音（クリックイベントの委譲で全ボタンに対応）
+      // ボタンに data-sound="decision" / "cancel" があればそれを優先し、なければ見た目（色）から判定する
+      const handleAreaClick = (e) => {
+        const button = e.target.closest('button');
+        if (!button) return;
+        const override = button.dataset.sound;
+        const isCancelStyle = button.className.includes('bg-gray-500') || button.className.includes('secondary-button');
+        const isCancel = override ? override === 'cancel' : isCancelStyle;
+        playClickAudio(isCancel ? cancelClickAudioRef : decisionClickAudioRef);
+      };
+
+      // 各エリア到達時の音声再生
+      // ①は起動直後で自動再生されてしまうとブラウザの制限で鳴らないため、タップ操作（hasStarted）を待ってから鳴らす
+      React.useEffect(() => {
+        if (currentStep === 1 && hasStarted) playAreaAudio(planAudioRef);
+      }, [currentStep, hasStarted]);
+
+      React.useEffect(() => {
+        if (currentStep === 2) playAreaAudio(confirmDocAudioRef);
       }, [currentStep]);
 
-      // QRコードに表示すべきプランと回数を決定するロジック
-      const getQRTarget = () => {
-        let targetPlan = plan;
-        let targetFrequency = frequency;
+      React.useEffect(() => {
+        if (currentStep === 2.2) playAreaAudio(termsAudioRef);
+      }, [currentStep]);
 
-        if (changePlanNextMonth) {
-          targetPlan = nextMonthPlan;
-          targetFrequency = nextMonthFrequency;
+      React.useEffect(() => {
+        if (currentStep === 2.3) playAreaAudio(soccerAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 2.4) playAreaAudio(teddyAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 2.5) playAreaAudio(planChangeFormAudioRef);
+      }, [currentStep]);
+
+      // お会計画面：呼び出し音を鳴らしてから、続けて会計の音声を再生する
+      React.useEffect(() => {
+        if (currentStep === 3 && callAudioRef.current) {
+          const callAudio = callAudioRef.current;
+          const playKaikei = () => playAreaAudio(kaikeiAudioRef);
+          callAudio.addEventListener('ended', playKaikei);
+          playAreaAudio(callAudioRef);
+          return () => callAudio.removeEventListener('ended', playKaikei);
         }
-        
-        return { targetPlan, targetFrequency };
-      };
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 7) playAreaAudio(cheerAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 4) playAreaAudio(cashCardAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 4.2) playAreaAudio(accountHomeAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 4.5) playAreaAudio(accountRegisterAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 4.8) playAreaAudio(accountWebAudioRef);
+      }, [currentStep]);
+
+      React.useEffect(() => {
+        if (currentStep === 5) playAreaAudio(reservationAudioRef);
+      }, [currentStep]);
+
+      // プラン変更の事務処理期限超過モーダルが表示されたときの音声
+      React.useEffect(() => {
+        if (showLateModal) playAreaAudio(planChangeDeadlineAudioRef);
+      }, [showLateModal]);
 
       // 入会金の表示金額を取得
       const getDisplayRegistrationFee = () => {
@@ -268,39 +400,57 @@
         }, 100);
       };
 
-      const { targetPlan: qrPlan, targetFrequency: qrFreq } = getQRTarget();
-
       return (
-        <div className="h-screen flex flex-col bg-gray-100">
-          {/* プロセス表示部分 */}
-          <div className="bg-white shadow-md p-4">
-            <div className="flex justify-center items-center space-x-2">
-              <div className={`px-4 py-2 rounded-lg font-bold text-sm ${currentStep === 1 ? 'process-active' : 'process-inactive'}`}>
-                ①プラン決め
+        <div className="h-screen flex flex-col bg-gray-100" onClick={handleAreaClick}>
+          {/* 起動直後はブラウザの自動再生制限で音声が鳴らないため、最初にタップしてもらう画面 */}
+          {!hasStarted && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70"
+              onClick={() => setHasStarted(true)}
+            >
+              <div className="bg-white rounded-lg p-10 text-center shadow-lg">
+                <p className="text-2xl font-bold">画面をタップして開始</p>
               </div>
-              <div className="text-xl">→</div>
-              <div className={`px-4 py-2 rounded-lg font-bold text-sm ${currentStep >= 2 && currentStep < 3 ? 'process-active' : 'process-inactive'}`}>
+            </div>
+          )}
+
+          {/* プロセス表示部分（flex-wrapで折り返し対応） */}
+          <div className="bg-white shadow-md p-4">
+            <div className="flex flex-wrap justify-center items-center gap-2">
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 1 ? 'process-active' : 'process-inactive'}`}>
+                ①プラン
+              </div>
+              <div className="text-lg">→</div>
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep >= 2 && currentStep < 3 ? 'process-active' : 'process-inactive'}`}>
                 ②確認書
               </div>
               {showPlanChangeForm && (
                 <React.Fragment>
-                  <div className="text-xl">→</div>
-                  <div className={`px-4 py-2 rounded-lg font-bold text-sm ${currentStep === 2.5 ? 'process-active' : 'process-inactive'}`}>
-                    ②-2プラン変更届
+                  <div className="text-lg">→</div>
+                  <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 2.5 ? 'process-active' : 'process-inactive'}`}>
+                    ②-2変更届
                   </div>
                 </React.Fragment>
               )}
-              <div className="text-xl">→</div>
-              <div className={`px-4 py-2 rounded-lg font-bold text-sm ${currentStep === 3 ? 'process-active' : 'process-inactive'}`}>
+              <div className="text-lg">→</div>
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 3 ? 'process-active' : 'process-inactive'}`}>
                 ③お会計
               </div>
-              <div className="text-xl">→</div>
-              <div className={`px-4 py-2 rounded-lg font-bold text-sm ${currentStep === 4 || currentStep === 4.2 || currentStep === 4.5 || currentStep === 4.8 ? 'process-active' : 'process-inactive'}`}>
-                ④引き落とし登録
+              <div className="text-lg">→</div>
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep >= 4 && currentStep < 5 ? 'process-active' : 'process-inactive'}`}>
+                ④引落登録
               </div>
-              <div className="text-xl">→</div>
-              <div className={`px-4 py-2 rounded-lg font-bold text-sm ${currentStep === 5 ? 'process-active' : 'process-inactive'}`}>
-                ⑤完了
+              <div className="text-lg">→</div>
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 5 ? 'process-active' : 'process-inactive'}`}>
+                ⑤予約
+              </div>
+              <div className="text-lg">→</div>
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep >= 6 && currentStep < 7 ? 'process-active' : 'process-inactive'}`}>
+                ⑥LINE
+              </div>
+              <div className="text-lg">→</div>
+              <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 7 ? 'process-active' : 'process-inactive'}`}>
+                ⑦完了
               </div>
             </div>
           </div>
@@ -903,6 +1053,7 @@
                     </button>
                     <button 
                       className="secondary-button px-10 py-4 rounded-lg text-xl font-bold"
+                      data-sound="decision"
                       onClick={() => {
                         setCurrentStep(4.2);
                         setTimeout(() => {
@@ -965,6 +1116,7 @@
                   <button 
                     className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                     onClick={() => {
+                      setLastStep4(4.2);
                       setCurrentStep(5);
                       setTimeout(() => {
                         document.getElementById('section-5')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -989,6 +1141,7 @@
                     <button 
                       className="primary-button px-10 py-4 rounded-lg text-xl font-bold"
                       onClick={() => {
+                        setLastStep4(4.5);
                         setCurrentStep(5);
                         setTimeout(() => {
                           document.getElementById('section-5')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1054,6 +1207,7 @@
                   <button 
                     className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                     onClick={() => {
+                      setLastStep4(4.8);
                       setCurrentStep(5);
                       setTimeout(() => {
                         document.getElementById('section-5')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1065,21 +1219,181 @@
                 </div>
               </div>
 
-              {/* ⑤完了セクション */}
-              <div id="section-5" className={`relative p-6 rounded-lg shadow-lg overflow-hidden ${currentStep === 5 ? 'active-section' : 'inactive-section'}`}>
+              {/* ⑤体験のご予約は？セクション */}
+              <div id="section-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 5 ? 'active-section' : 'inactive-section'}`}>
+                <h2 className="text-2xl font-bold mb-6 text-center">⑤体験のご予約は？</h2>
+                
+                <div className="flex flex-col items-center space-y-6 py-8 text-center">
+                  <div className="flex space-x-8 mt-6">
+                    <button 
+                      className="px-10 py-4 rounded-lg text-xl font-bold text-white shadow"
+                      style={{ backgroundColor: '#06C755' }}
+                      onClick={() => {
+                        setCurrentStep(7);
+                        setTimeout(() => {
+                          document.getElementById('section-7')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                      }}
+                    >
+                      HP→LINE
+                    </button>
+                    <button 
+                      className="primary-button px-10 py-4 rounded-lg text-xl font-bold shadow"
+                      onClick={() => {
+                        setCurrentStep(6);
+                        setTimeout(() => {
+                          document.getElementById('section-6')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                      }}
+                    >
+                      ストアカ
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
+                  <button 
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
+                    onClick={() => {
+                      setCurrentStep(lastStep4);
+                      setTimeout(() => {
+                        document.getElementById(`section-${lastStep4.toString().replace('.', '-')}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                  >
+                    戻る
+                  </button>
+                  <div></div>
+                </div>
+              </div>
+
+              {/* ⑥予約のためにお教室とお友達になろう！セクション */}
+              <div id="section-6" className={`p-6 rounded-lg shadow-lg ${currentStep === 6 ? 'active-section' : 'inactive-section'}`}>
+                <h2 className="text-2xl font-bold mb-6 text-center">⑥予約のためにお教室とお友達になろう！</h2>
+                
+                <div className="flex flex-col items-center space-y-6 py-8 text-center">
+                  <p className="text-xl font-bold leading-relaxed">
+                    こちらのQRをご自身のスマホで読み取ってね
+                  </p>
+                  
+                  <img 
+                    src="./LINEQR.png"
+                    alt="LINE QRコード"
+                    style={{ 
+                      width: "250px", 
+                      height: "250px", 
+                      objectFit: "contain",
+                      border: "1px solid #ddd" 
+                    }}
+                    onError={(e) => {
+                      console.error("画像読み込みエラー:", e.target.src);
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  {/* 画像が読み込めなかった場合のプレースホルダー */}
+                  <div 
+                    className="qr-placeholder" 
+                    style={{ 
+                      display: 'none',
+                      width: "250px",
+                      height: "250px"
+                    }}
+                  >
+                    <div className="text-center">
+                      <p className="text-sm">LINE<br/>QRコード</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
+                  <button 
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
+                    onClick={() => {
+                      setCurrentStep(5);
+                      setTimeout(() => {
+                        document.getElementById('section-5')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                  >
+                    戻る
+                  </button>
+                  <button
+                    className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
+                    onClick={() => {
+                      setCurrentStep(6.5);
+                      setTimeout(() => {
+                        document.getElementById('section-6-5')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                  >
+                    次へ(できた！)
+                  </button>
+                </div>
+              </div>
+
+              {/* ⑥-2 LINEから予約がとれるようにするセクション */}
+              <div id="section-6-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 6.5 ? 'active-section' : 'inactive-section'}`}>
+                <h2 className="text-2xl font-bold mb-6 text-center">LINEから予約がとれるようにする</h2>
+
+                <div className="flex flex-col items-center space-y-6 py-8 text-center">
+                  <p className="text-xl font-bold leading-relaxed">
+                    LINE予約用のアカウントを作成しましょう
+                  </p>
+
+                  <img
+                    src="./20250528来月以降の月謝登録手順 (1).jpg"
+                    alt="LINEから予約を取る手順"
+                    style={{
+                      maxWidth: "100%",
+                      width: "600px",
+                      objectFit: "contain",
+                      border: "1px solid #ddd"
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
+                  <button
+                    className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
+                    onClick={() => {
+                      setCurrentStep(6);
+                      setTimeout(() => {
+                        document.getElementById('section-6')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                  >
+                    戻る
+                  </button>
+                  <button
+                    className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
+                    onClick={() => {
+                      setCurrentStep(7);
+                      setTimeout(() => {
+                        document.getElementById('section-7')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                  >
+                    次へ(できた！)
+                  </button>
+                </div>
+              </div>
+
+              {/* ⑦完了セクション */}
+              <div id="section-7" className={`relative p-6 rounded-lg shadow-lg overflow-hidden ${currentStep === 7 ? 'active-section' : 'inactive-section'}`}>
                 {/* 紙吹雪の背景 */}
-                <img 
-                  src="./images/confetti.gif" 
-                  alt="紙吹雪" 
-                  className="absolute top-0 left-0 h-full object-cover opacity-80 pointer-events-none z-0" 
+                <img
+                  src="./confetti-10.gif"
+                  alt="紙吹雪"
+                  className="absolute top-0 left-0 h-full object-cover opacity-80 pointer-events-none z-0"
                 />
-                <img 
-                  src="./images/confetti.gif" 
-                  alt="紙吹雪" 
-                  className="absolute top-0 right-0 h-full object-cover opacity-80 pointer-events-none transform scale-x-[-1] z-0" 
+                <img
+                  src="./confetti-10.gif"
+                  alt="紙吹雪"
+                  className="absolute top-0 right-0 h-full object-cover opacity-80 pointer-events-none transform scale-x-[-1] z-0"
                 />
 
-                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">⑤完了</h2>
+                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">⑦完了</h2>
                 
                 <div className="relative z-10 flex flex-col items-center justify-center space-y-8 py-10">
                   <div className="text-center space-y-6">
@@ -1139,8 +1453,10 @@
     };
 
     // コンポーネントをレンダリング
-    const root = ReactDOM.createRoot(document.getElementById('app-container'));
-    root.render(<App />);
+    ReactDOM.render(
+      <App />,
+      document.getElementById('app-container')
+    );
   </script>
 </body>
 </html>
