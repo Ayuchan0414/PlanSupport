@@ -8,7 +8,7 @@
   <script src="./libs/react-dom.development.js"></script>
   <script src="./libs/babel.min.js"></script>
   <script src="./libs/tailwind.min.js"></script>
-  
+
   <style>
     body {
       margin: 0;
@@ -86,11 +86,15 @@
       justify-content: center;
       background-color: #f0f0f0;
     }
+    /* 言語切り替えスイッチ */
+    .lang-switch button {
+      transition: background-color 0.15s ease;
+    }
   </style>
 </head>
 <body>
   <div id="app-container"></div>
-  
+
   <script type="text/babel">
     // 音声ファイルを事前に読み込んでおくフック（再生時の遅延を防ぐため）
     const usePreloadedAudio = (src, volume = 0.5) => {
@@ -101,8 +105,253 @@
         audio.volume = volume;
         audio.load();
         ref.current = audio;
+        // src が切り替わる（＝言語切り替え等）ときは、直前の音声が再生中でも止めてから差し替える
+        return () => {
+          audio.pause();
+        };
       }, [src]);
       return ref;
+    };
+
+    // 英語表示用の月名
+    const MONTH_NAMES_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    // プラン・回数の表示ラベル（state の値自体は日本語のまま持ち、表示だけ切り替える）
+    const PLAN_LABELS = {
+      ja: { "フルタイム": "フルタイム", "平日フル": "平日フル", "いつでも夕方": "いつでも夕方" },
+      en: { "フルタイム": "Full-time", "平日フル": "Weekday Full", "いつでも夕方": "Anytime Evening" }
+    };
+    const FREQUENCY_LABELS = {
+      ja: { "月2回": "月2回", "月3回": "月3回", "月4回": "月4回", "月6回": "月6回" },
+      en: { "月2回": "2x / month", "月3回": "3x / month", "月4回": "4x / month", "月6回": "6x / month" }
+    };
+
+    // 画面上のテキスト（日本語・英語）
+    const UI_TEXT = {
+      ja: {
+        appTitle: "料金計算・契約フォーム",
+        tapToStart: "画面をタップして開始",
+        stepPlan: "①プラン",
+        stepConfirm: "②確認書",
+        stepPlanChange: "②-2変更届",
+        stepPayment: "③お会計",
+        stepDebit: "④引落登録",
+        stepBooking: "⑤予約",
+        stepLine: "⑥LINE",
+        stepComplete: "⑦完了",
+        back: "戻る",
+        next: "次へ",
+        todayCost: "今日の費用",
+        enrollmentFee: "入会費",
+        thisMonthTuition: "今月の月謝",
+        nextMonthTuition: "来月の月謝",
+        todayTotal: "今日の合計",
+        tuition: "月謝",
+        s1Title: "①プランを決めよう",
+        planLabelThisMonth: "今月のプラン",
+        planLabelPlain: "プラン",
+        selectPlanPlaceholder: "プランを選んでください",
+        freqLabelThisMonth: "今月の回数",
+        freqLabelPlain: "回数",
+        selectFreqPlaceholder: "回数を選んでください",
+        joinAtTrialLabel: "体験時に入会",
+        startThisMonthLabel: "今月から始める",
+        changePlanNextMonthLabel: "今月と来月でプランを変える",
+        startNextMonthLabel: "来月から始める",
+        afterNextCostTitle: (m) => `${m}以降の費用`,
+        confirmPlanButton: "プラン確定（次へ）",
+        s2Title: "②確認書を書こう",
+        s2SubStudentInfo: "①受講者情報🐬",
+        thEnrollDate: "入会日",
+        thContractPlan: "契約プラン",
+        thSessions: "回数",
+        thStartDate: "受講開始日",
+        thThisMonthTuition: "今月のお月謝",
+        thNextMonthTuitionOnward: "来月以降のお月謝",
+        notSelected: "未選択",
+        s2_2SubTitle: "② 確認・同意事項🍎",
+        termsIntro1: "ayuiida洋裁教室 受講規約をご覧ください",
+        termsIntro2: "特に大切なのは、以下の4つです",
+        termArticleLabel1: "1条-1",
+        termArticleText1: "お月謝のお支払いは前月27日に翌月分を銀行の自動引き落としです",
+        termArticleLabel2: "1条-3",
+        termArticleText2: "いかなる理由（自己都合、遅延、規約違反による強制退会）でも返金できません",
+        termArticleLabel3: "3条-1",
+        termArticleText3: "プラン変更、休会、退会をご希望の際は、希望月の5日までに届け出を提出してください",
+        termArticleLabel4: "5条-3",
+        termArticleText4: "レッスン時間外の問い合わせ対応は、「フルタイム」「平日フル」プラン限定です",
+        s2_3SubTitle: "③ ご署名⚽",
+        signatureText1: "「受講規約」に同意いただける場合は",
+        signatureText2: "太枠内にお名前、電話番号、住所をご記入ください",
+        s2_4SubTitle: "④ アンケート🧸",
+        surveyText1: "アンケートにご協力をお願いいたします",
+        surveyText2: "このお教室をどのようにお知りになりましたか？",
+        surveyText3: "あてはまるものに〇をつけてください",
+        s2_5Title: "プラン変更届を書こう",
+        planChangeStep1: "①お名前、電話番号をご記入ください",
+        planChangeStep2: "②確認・同意事項をお読みになり、□にチェックを入れてください",
+        planChangeStep3: "③申込内容",
+        applicationDate: "申込日：",
+        planBeforeChange: "変更前のプラン：",
+        planAfterChange: "変更後のプラン：",
+        effectiveDate: "変更適用日：",
+        s3Title: "③本日のお会計をしよう",
+        callTeacher: "先生を呼んでね",
+        todayPortionOk: "今日分・・・",
+        okMark: "OK！",
+        fromMonthArrow: (m) => `${m}以降・・・→`,
+        s4Title: (m) => `④${m}以降の引き落とし登録`,
+        cashCardPrompt: "銀行のキャッシュカードをご用意ください",
+        broughtIt: "持ってきた",
+        didNotBringIt: "持ってきていない",
+        s4_2Title: "④ご自宅での口座振替のご案内",
+        homeInstructionReceive: "先生から案内をお受け取りください🌸",
+        deadlineText: (m) => `登録締め切り日 ${m}5日 23時59分`,
+        teacherNoteText: (m) => `※先生は確認書に「ご自宅で口座振替登録 ${m}分以降」と記載してください`,
+        nextReceived: "次へ(受け取った)",
+        s4_5Title: (m) => `④${m}以降の引き落とし登録 振替口座登録`,
+        registerBankText: (m) => `${m}以降の銀行口座振替の登録をします`,
+        handDeviceText: "先生は口座登録端末とタブレットをお客様にお渡ししてください",
+        teacherPressText: "下のボタンは先生が押してください。ICチップ読み取りはできません。",
+        itWorked: "うまくいった",
+        itDidNotWork: "うまくいかない",
+        s4_8Title: "④別の方法(Web)での口座振替のご案内",
+        webAltText1: "もちろん大丈夫です。別の方法で登録します",
+        webAltText2: "先生からやり方のご案内をお受け取りください🌷",
+        nextDone: "次へ(できた！)",
+        s5Title: "⑤体験のご予約は？",
+        hpLineButton: "HP→LINE",
+        storecaButton: "ストアカ",
+        s6Title: "⑥予約のためにお教室とお友達になろう！",
+        scanQrText: "こちらのQRをご自身のスマホで読み取ってね",
+        lineQrAlt: "LINE QRコード",
+        qrCodeWord: "QRコード",
+        s6_5Title: "LINEから予約がとれるようにする",
+        lineAccountText: "LINE予約用のアカウントを作成しましょう",
+        lineStepsAlt: "LINEから予約を取る手順",
+        s7Title: "⑦完了",
+        confettiAlt: "紙吹雪",
+        welcomeLine1: "ようこそ！",
+        welcomeLine2: "ayuiida洋裁教室へ！",
+        enjoyText: "お裁縫のある豊かな生活をどうぞお楽しみくださいませ🌸",
+        receiveGiftText: "先生からプレゼント資料をお受け取りください",
+        lateModalText1: "本日は事務処理の期限を過ぎています。",
+        lateModalText2: (m) => `そのため、プラン変更は最短で${m}1日から適用となりますが、よろしいですか？`,
+        yes: "はい",
+        no: "いいえ"
+      },
+      en: {
+        appTitle: "Fee Calculation & Enrollment Form",
+        tapToStart: "Tap to Begin",
+        stepPlan: "① Plan",
+        stepConfirm: "② Confirm",
+        stepPlanChange: "②-2 Change",
+        stepPayment: "③ Payment",
+        stepDebit: "④ Debit",
+        stepBooking: "⑤ Booking",
+        stepLine: "⑥ LINE",
+        stepComplete: "⑦ Complete",
+        back: "Back",
+        next: "Next",
+        todayCost: "Today's Cost",
+        enrollmentFee: "Enrollment Fee",
+        thisMonthTuition: "This Month's Tuition",
+        nextMonthTuition: "Next Month's Tuition",
+        todayTotal: "Total Today",
+        tuition: "Tuition",
+        s1Title: "① Choose Your Plan",
+        planLabelThisMonth: "This Month's Plan",
+        planLabelPlain: "Plan",
+        selectPlanPlaceholder: "Please select a plan",
+        freqLabelThisMonth: "This Month's Sessions",
+        freqLabelPlain: "Sessions",
+        selectFreqPlaceholder: "Please select frequency",
+        joinAtTrialLabel: "Enrolling at a trial lesson",
+        startThisMonthLabel: "Start this month",
+        changePlanNextMonthLabel: "Change plan next month",
+        startNextMonthLabel: "Start next month",
+        afterNextCostTitle: (m) => `Cost from ${m}`,
+        confirmPlanButton: "Confirm Plan (Next)",
+        s2Title: "② Confirmation Document",
+        s2SubStudentInfo: "① Student Information 🐬",
+        thEnrollDate: "Enrollment Date",
+        thContractPlan: "Contract Plan",
+        thSessions: "Sessions",
+        thStartDate: "Start Date",
+        thThisMonthTuition: "This Month's Tuition",
+        thNextMonthTuitionOnward: "Tuition from Next Month",
+        notSelected: "Not selected",
+        s2_2SubTitle: "② Terms & Agreement 🍎",
+        termsIntro1: "Please review the ayuiida Sewing Studio Terms of Enrollment",
+        termsIntro2: "The following four points are especially important",
+        termArticleLabel1: "Art. 1-1",
+        termArticleText1: "Tuition for the following month is automatically debited from your bank account on the 27th of the previous month",
+        termArticleLabel2: "Art. 1-3",
+        termArticleText2: "No refunds will be issued for any reason (personal circumstances, delay, or forced withdrawal due to a violation of the terms)",
+        termArticleLabel3: "Art. 3-1",
+        termArticleText3: "To change your plan, take a leave, or withdraw, please submit notice by the 5th of the desired month",
+        termArticleLabel4: "Art. 5-3",
+        termArticleText4: "Support outside lesson hours is available only for the \"Full-time\" and \"Weekday Full\" plans",
+        s2_3SubTitle: "③ Signature ⚽",
+        signatureText1: "If you agree to the \"Terms of Enrollment,\"",
+        signatureText2: "please write your name, phone number, and address in the box below",
+        s2_4SubTitle: "④ Survey 🧸",
+        surveyText1: "Please help us with a short survey",
+        surveyText2: "How did you hear about this school?",
+        surveyText3: "Please circle all that apply",
+        s2_5Title: "Plan Change Request Form",
+        planChangeStep1: "① Please write your name and phone number",
+        planChangeStep2: "② Please read the Terms & Agreement and check the box",
+        planChangeStep3: "③ Application Details",
+        applicationDate: "Application Date:",
+        planBeforeChange: "Current Plan:",
+        planAfterChange: "New Plan:",
+        effectiveDate: "Effective Date:",
+        s3Title: "③ Today's Payment",
+        callTeacher: "Please call your teacher",
+        todayPortionOk: "Today: ",
+        okMark: "OK!",
+        fromMonthArrow: (m) => `From ${m}: →`,
+        s4Title: (m) => `④ Direct Debit Registration (from ${m})`,
+        cashCardPrompt: "Please have your bank cash card ready",
+        broughtIt: "I brought it",
+        didNotBringIt: "I didn't bring it",
+        s4_2Title: "④ Bank Transfer Registration at Home",
+        homeInstructionReceive: "Please receive the instructions from your teacher 🌸",
+        deadlineText: (m) => `Registration deadline: ${m} 5th, 23:59`,
+        teacherNoteText: (m) => `*Teacher: please note on the confirmation document "Home bank transfer registration, from ${m}"`,
+        nextReceived: "Next (Received)",
+        s4_5Title: (m) => `④ Direct Debit Registration (from ${m}) — Bank Account Setup`,
+        registerBankText: (m) => `We will register your bank transfer from ${m}`,
+        handDeviceText: "Teacher: please hand the account registration device and tablet to the customer",
+        teacherPressText: "The button below should be pressed by the teacher. IC chip reading is not supported.",
+        itWorked: "It worked",
+        itDidNotWork: "It didn't work",
+        s4_8Title: "④ Alternative (Web) Bank Transfer Registration",
+        webAltText1: "No problem at all. We'll register using a different method.",
+        webAltText2: "Please receive instructions from your teacher on how to do this 🌷",
+        nextDone: "Next (Done!)",
+        s5Title: "⑤ Trial Lesson Booking",
+        hpLineButton: "Website→LINE",
+        storecaButton: "Street Academy",
+        s6Title: "⑥ Add the School as a LINE Friend!",
+        scanQrText: "Please scan this QR code with your smartphone",
+        lineQrAlt: "LINE QR Code",
+        qrCodeWord: "QR Code",
+        s6_5Title: "Set Up LINE for Booking",
+        lineAccountText: "Let's create an account for LINE booking",
+        lineStepsAlt: "Steps to book via LINE",
+        s7Title: "⑦ Complete",
+        confettiAlt: "Confetti",
+        welcomeLine1: "Welcome!",
+        welcomeLine2: "to ayuiida Sewing Studio!",
+        enjoyText: "We hope you enjoy a rich life with sewing 🌸",
+        receiveGiftText: "Please receive some reference materials as a gift from your teacher",
+        lateModalText1: "Today is past the administrative deadline.",
+        lateModalText2: (m) => `As a result, the plan change will take effect at the earliest on ${m} 1st. Is that okay?`,
+        yes: "Yes",
+        no: "No"
+      }
     };
 
     const App = () => {
@@ -132,24 +381,27 @@
       const [currentStep, setCurrentStep] = React.useState(1);
       // 起動直後はブラウザの自動再生制限で音声が鳴らないため、タップ操作を挟むためのフラグ
       const [hasStarted, setHasStarted] = React.useState(false);
+      // 表示言語（内部の値・計算ロジックは日本語のまま。表示だけこの値で切り替える）
+      const [language, setLanguage] = React.useState('ja');
+      const L = UI_TEXT[language];
       const [plan, setPlan] = React.useState("");
       const [frequency, setFrequency] = React.useState("");
       const [nextMonthPlan, setNextMonthPlan] = React.useState("");
       const [nextMonthFrequency, setNextMonthFrequency] = React.useState("");
-      
+
       const [joinAtTrial, setJoinAtTrial] = React.useState(true);
-      
+
       const [startTiming, setStartTiming] = React.useState("今月から始める");
       const [changePlanNextMonth, setChangePlanNextMonth] = React.useState(false);
       const [showPlanChangeForm, setShowPlanChangeForm] = React.useState(false);
-      
+
       // モーダル・遅延適用管理用
       const [showLateModal, setShowLateModal] = React.useState(false);
       const [isDelayedChange, setIsDelayedChange] = React.useState(false);
 
       // ④のどの画面から⑤に進んだかを記憶する用
       const [lastStep4, setLastStep4] = React.useState(4.5);
-      
+
       // 金額計算
       const [thisMonthFee, setThisMonthFee] = React.useState(0);
       const [nextMonthFee, setNextMonthFee] = React.useState(0);
@@ -163,19 +415,31 @@
       // 来月の計算
       const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
       const targetNextMonthNum = nextMonth.getMonth() + 1;
-      
+
       // N月(今月+2か月)の計算（ポップアップのm月としても使用）
       const targetMonthAfterNext = new Date(today.getFullYear(), today.getMonth() + 2, 1).getMonth() + 1;
-      const afterNextMonthLabel = `${targetMonthAfterNext}月`;
-      
-      // UI表示用のラベル（「来月」または「○月以降」）
-      const nextMonthLabel = isDelayedChange ? `${targetMonthAfterNext}月以降` : "来月";
+
+      // 英語表示用の月名ヘルパー（日本語は「○月」、英語は月の英語名）
+      const monthLabel = (n) => language === 'en' ? MONTH_NAMES_EN[n - 1] : `${n}月`;
+      const nextMonthNumLabel = monthLabel(targetNextMonthNum);
+      const afterNextMonthLabel = monthLabel(targetMonthAfterNext);
+
+      // プラン変更フォームの「来月」欄見出し（日本語は「来月」/「○月以降」、英語は文脈に応じた表現）
+      const nextMonthPlanFieldLabel = language === 'en'
+        ? (isDelayedChange ? `Plan from ${afterNextMonthLabel}` : "Next Month's Plan")
+        : `${isDelayedChange ? `${targetMonthAfterNext}月以降` : "来月"}のプラン`;
+      const nextMonthFreqFieldLabel = language === 'en'
+        ? (isDelayedChange ? `Sessions from ${afterNextMonthLabel}` : "Next Month's Sessions")
+        : `${isDelayedChange ? `${targetMonthAfterNext}月以降` : "来月"}の回数`;
 
       // プラン変更適用日の計算（isDelayedChange が true なら再来月の1日、false なら来月の1日）
       const applyMonthOffset = isDelayedChange ? 2 : 1;
       const applyDate = new Date(today.getFullYear(), today.getMonth() + applyMonthOffset, 1);
 
       const formatDate = (date) => {
+        if (language === 'en') {
+          return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const day = date.getDate();
@@ -210,19 +474,19 @@
           setNextMonthTotal(0);
           return;
         }
-        
+
         const monthlyFee = feeTable[plan][frequency];
-        
+
         if (startTiming === "今月から始める") {
           setThisMonthFee(monthlyFee);
-          
+
           let actualNextMonthFee = monthlyFee; // 今日の費用に含まれる「来月の月謝」
           let afterNextMonthFee = monthlyFee;  // N月以降の月謝
-          
+
           // プラン変更がある場合
           if (changePlanNextMonth && nextMonthPlan && nextMonthFrequency) {
             const changedFee = feeTable[nextMonthPlan][nextMonthFrequency];
-            
+
             if (isDelayedChange) {
               // 20日以降で「はい」が選ばれた遅延適用：来月は旧プラン、再来月(N月)から新プラン
               actualNextMonthFee = monthlyFee;
@@ -233,11 +497,11 @@
               afterNextMonthFee = changedFee;
             }
           }
-          
+
           setNextMonthFee(actualNextMonthFee);
           setThisMonthTotal(currentRegistrationFee + monthlyFee + actualNextMonthFee);
           setNextMonthTotal(afterNextMonthFee);
-          
+
         } else {
           // 来月から始める場合
           setThisMonthFee(0);
@@ -247,22 +511,38 @@
         }
       }, [plan, frequency, joinAtTrial, startTiming, changePlanNextMonth, nextMonthPlan, nextMonthFrequency, isDelayedChange, registrationFee]);
 
+      // 言語切り替えに応じて、タブのタイトルと html の lang 属性を更新
+      React.useEffect(() => {
+        document.title = L.appTitle;
+        document.documentElement.lang = language;
+      }, [language]);
+
+      // 音声ファイルのパス（英語モードの時は ./en/ 配下にある「en+元のファイル名」のファイルを参照する）
+      // ※決定音・キャンセル音・呼び出し音・歓声など、言葉を含まない効果音は言語に関係なく共通のファイルを使う
+      const getAudioPath = (filename) => language === 'en' ? `./en/en${filename}` : `./${filename}`;
+
       // 各エリアの音声
-      const planAudioRef = usePreloadedAudio('./音声プランを決めよう.wav');
-      const confirmDocAudioRef = usePreloadedAudio('./音声確認書を書こう.wav');
-      const termsAudioRef = usePreloadedAudio('./音声受講規約.wav');
-      const soccerAudioRef = usePreloadedAudio('./音声サッカー.wav');
-      const teddyAudioRef = usePreloadedAudio('./音声テディ.wav');
+      const planAudioRef = usePreloadedAudio(getAudioPath('音声プランを決めよう.wav'));
+      const confirmDocAudioRef = usePreloadedAudio(getAudioPath('音声確認書を書こう.wav'));
+      const termsAudioRef = usePreloadedAudio(getAudioPath('音声受講規約.wav'));
+      const soccerAudioRef = usePreloadedAudio(getAudioPath('音声サッカー.wav'));
+      const teddyAudioRef = usePreloadedAudio(getAudioPath('音声テディ.wav'));
       const callAudioRef = usePreloadedAudio('./呼び出し音.mp3');
-      const kaikeiAudioRef = usePreloadedAudio('./音声お会計.wav');
+      const kaikeiAudioRef = usePreloadedAudio(getAudioPath('音声お会計.wav'));
       const cheerAudioRef = usePreloadedAudio('./歓声と拍手1.mp3');
-      const planChangeDeadlineAudioRef = usePreloadedAudio('./プラン変更事務処理期限.wav');
-      const cashCardAudioRef = usePreloadedAudio('./銀行のキャッシュカードをご用意ください.wav');
-      const accountHomeAudioRef = usePreloadedAudio('./④ご自宅での口座振替のご案内.wav');
-      const accountRegisterAudioRef = usePreloadedAudio('./④引き落とし登録 振替口座登録.wav');
-      const accountWebAudioRef = usePreloadedAudio('./④別の方法(Web)での口座振替のご案内.wav');
-      const reservationAudioRef = usePreloadedAudio('./⑤体験のご予約は？.wav');
-      const planChangeFormAudioRef = usePreloadedAudio('./プラン変更届を書こう.wav');
+      const planChangeDeadlineAudioRef = usePreloadedAudio(getAudioPath('プラン変更事務処理期限.wav'));
+      const cashCardAudioRef = usePreloadedAudio(getAudioPath('銀行のキャッシュカードをご用意ください.wav'));
+      const accountHomeAudioRef = usePreloadedAudio(getAudioPath('④ご自宅での口座振替のご案内.wav'));
+      const accountHomeAudioRef2 = usePreloadedAudio(getAudioPath('④ご自宅での口座振替のご案内2.wav'));
+      // ④-5の1本目：日本語は「音声口座登録.wav」、英語は先生用に分割した「④引き落とし登録 振替口座登録.wav」を使う（日英でファイル名が異なる特殊枠）
+      const accountRegisterAudioRef = usePreloadedAudio(language === 'en' ? './en/en④引き落とし登録 振替口座登録.wav' : './音声口座登録.wav');
+      const accountRegisterAudioRef2 = usePreloadedAudio(getAudioPath('④引き落とし登録 振替口座登録2.wav'));
+      const accountWebAudioRef = usePreloadedAudio(getAudioPath('④別の方法(Web)での口座振替のご案内.wav'));
+      const reservationAudioRef = usePreloadedAudio(getAudioPath('⑤体験のご予約は？.wav'));
+      const planChangeFormAudioRef = usePreloadedAudio(getAudioPath('プラン変更届を書こう.wav'));
+      const lineIntroAudioRef = usePreloadedAudio(getAudioPath('音声6,お友達になろう.wav'));
+      const lineAccountAudioRef = usePreloadedAudio(getAudioPath('音声LINE友達アカウント作成方法.wav'));
+      const welcomeAudioRef = usePreloadedAudio(getAudioPath('音声ようこそ.wav'));
 
       // ボタン効果音
       const decisionClickAudioRef = usePreloadedAudio('./決定ボタンを押す3.mp3', 0.4);
@@ -273,8 +553,8 @@
       const areaAudioRefs = [
         planAudioRef, confirmDocAudioRef, termsAudioRef, soccerAudioRef, teddyAudioRef,
         callAudioRef, kaikeiAudioRef, cheerAudioRef, planChangeDeadlineAudioRef,
-        cashCardAudioRef, accountHomeAudioRef, accountRegisterAudioRef, accountWebAudioRef, reservationAudioRef,
-        planChangeFormAudioRef
+        cashCardAudioRef, accountHomeAudioRef, accountHomeAudioRef2, accountRegisterAudioRef, accountRegisterAudioRef2, accountWebAudioRef, reservationAudioRef,
+        planChangeFormAudioRef, lineIntroAudioRef, lineAccountAudioRef, welcomeAudioRef
       ];
 
       const stopAreaAudio = () => {
@@ -320,29 +600,30 @@
 
       // 各エリア到達時の音声再生
       // ①は起動直後で自動再生されてしまうとブラウザの制限で鳴らないため、タップ操作（hasStarted）を待ってから鳴らす
+      // ※依存配列に language を入れているのは、今いるエリアのまま言語を切り替えたときに、そのエリアの音声を新しい言語で鳴らし直すため
       React.useEffect(() => {
         if (currentStep === 1 && hasStarted) playAreaAudio(planAudioRef);
-      }, [currentStep, hasStarted]);
+      }, [currentStep, hasStarted, language]);
 
       React.useEffect(() => {
         if (currentStep === 2) playAreaAudio(confirmDocAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 2.2) playAreaAudio(termsAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 2.3) playAreaAudio(soccerAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 2.4) playAreaAudio(teddyAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 2.5) playAreaAudio(planChangeFormAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       // お会計画面：呼び出し音を鳴らしてから、続けて会計の音声を再生する
       React.useEffect(() => {
@@ -353,41 +634,86 @@
           playAreaAudio(callAudioRef);
           return () => callAudio.removeEventListener('ended', playKaikei);
         }
-      }, [currentStep]);
+      }, [currentStep, language]);
+
+      // 完了画面：歓声と拍手を鳴らしてから、続けてようこその音声を再生する
+      React.useEffect(() => {
+        if (currentStep === 7 && cheerAudioRef.current) {
+          const cheerAudio = cheerAudioRef.current;
+          const playWelcome = () => playAreaAudio(welcomeAudioRef);
+          cheerAudio.addEventListener('ended', playWelcome);
+          playAreaAudio(cheerAudioRef);
+          return () => cheerAudio.removeEventListener('ended', playWelcome);
+        }
+      }, [currentStep, language]);
 
       React.useEffect(() => {
-        if (currentStep === 7) playAreaAudio(cheerAudioRef);
-      }, [currentStep]);
+        if (currentStep === 6) playAreaAudio(lineIntroAudioRef);
+      }, [currentStep, language]);
+
+      React.useEffect(() => {
+        if (currentStep === 6.5) playAreaAudio(lineAccountAudioRef);
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 4) playAreaAudio(cashCardAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
+      // ④-2 ご自宅での口座振替のご案内：1つ目の音声を鳴らしてから、続けて2つ目の音声を再生する
       React.useEffect(() => {
-        if (currentStep === 4.2) playAreaAudio(accountHomeAudioRef);
-      }, [currentStep]);
+        if (currentStep === 4.2 && accountHomeAudioRef.current) {
+          const audio1 = accountHomeAudioRef.current;
+          const playPart2 = () => playAreaAudio(accountHomeAudioRef2);
+          audio1.addEventListener('ended', playPart2);
+          playAreaAudio(accountHomeAudioRef);
+          return () => audio1.removeEventListener('ended', playPart2);
+        }
+      }, [currentStep, language]);
 
+      // ④-5 振替口座登録：1つ目の音声を鳴らしてから、続けて2つ目の音声を再生する（日本語は2つ目が無いので1本のみで終わる）
       React.useEffect(() => {
-        if (currentStep === 4.5) playAreaAudio(accountRegisterAudioRef);
-      }, [currentStep]);
+        if (currentStep === 4.5 && accountRegisterAudioRef.current) {
+          const audio1 = accountRegisterAudioRef.current;
+          const playPart2 = () => playAreaAudio(accountRegisterAudioRef2);
+          audio1.addEventListener('ended', playPart2);
+          playAreaAudio(accountRegisterAudioRef);
+          return () => audio1.removeEventListener('ended', playPart2);
+        }
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 4.8) playAreaAudio(accountWebAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       React.useEffect(() => {
         if (currentStep === 5) playAreaAudio(reservationAudioRef);
-      }, [currentStep]);
+      }, [currentStep, language]);
 
       // プラン変更の事務処理期限超過モーダルが表示されたときの音声
       React.useEffect(() => {
         if (showLateModal) playAreaAudio(planChangeDeadlineAudioRef);
-      }, [showLateModal]);
+      }, [showLateModal, language]);
 
       // 入会金の表示金額を取得
       const getDisplayRegistrationFee = () => {
         return joinAtTrial ? registrationFee - 1000 : registrationFee;
       };
+
+      // 金額表示（日本語は「12,345円」、英語は「¥12,345」）
+      const renderFee = (amount) => (
+        language === 'en'
+          ? <React.Fragment>¥{amount.toLocaleString()}</React.Fragment>
+          : <React.Fragment>{amount.toLocaleString()}<span className="text-sm">円</span></React.Fragment>
+      );
+      const renderFeePerMonth = (amount) => (
+        language === 'en'
+          ? <React.Fragment>¥{amount.toLocaleString()}/month</React.Fragment>
+          : <React.Fragment>{amount.toLocaleString()}円／月</React.Fragment>
+      );
+
+      // プラン・回数の表示ラベル（value は日本語のまま、表示だけ切り替える）
+      const planLabel = (key) => key ? (PLAN_LABELS[language][key] || key) : '';
+      const freqLabel = (key) => key ? (FREQUENCY_LABELS[language][key] || key) : '';
 
       // 次のステップへ進む処理
       const proceedToNextStep = () => {
@@ -399,6 +725,27 @@
 
       return (
         <div className="h-screen flex flex-col bg-gray-100" onClick={handleAreaClick}>
+          {/* 言語切り替えスイッチ（画面右上・エリアの外に固定表示） */}
+          <div
+            className="lang-switch fixed top-2 right-2 z-[60] flex rounded-full overflow-hidden shadow-lg border border-gray-300 bg-white text-sm font-bold"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className={`px-3 py-1 ${language === 'ja' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600'}`}
+              onClick={() => setLanguage('ja')}
+            >
+              日本語
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 ${language === 'en' ? 'bg-orange-500 text-white' : 'bg-white text-gray-600'}`}
+              onClick={() => setLanguage('en')}
+            >
+              EN
+            </button>
+          </div>
+
           {/* 起動直後はブラウザの自動再生制限で音声が鳴らないため、最初にタップしてもらう画面 */}
           {!hasStarted && (
             <div
@@ -406,7 +753,7 @@
               onClick={() => setHasStarted(true)}
             >
               <div className="bg-white rounded-lg p-10 text-center shadow-lg">
-                <p className="text-2xl font-bold">画面をタップして開始</p>
+                <p className="text-2xl font-bold">{L.tapToStart}</p>
               </div>
             </div>
           )}
@@ -415,39 +762,39 @@
           <div className="bg-white shadow-md p-4">
             <div className="flex flex-wrap justify-center items-center gap-2">
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 1 ? 'process-active' : 'process-inactive'}`}>
-                ①プラン
+                {L.stepPlan}
               </div>
               <div className="text-lg">→</div>
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep >= 2 && currentStep < 3 ? 'process-active' : 'process-inactive'}`}>
-                ②確認書
+                {L.stepConfirm}
               </div>
               {showPlanChangeForm && (
                 <React.Fragment>
                   <div className="text-lg">→</div>
                   <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 2.5 ? 'process-active' : 'process-inactive'}`}>
-                    ②-2変更届
+                    {L.stepPlanChange}
                   </div>
                 </React.Fragment>
               )}
               <div className="text-lg">→</div>
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 3 ? 'process-active' : 'process-inactive'}`}>
-                ③お会計
+                {L.stepPayment}
               </div>
               <div className="text-lg">→</div>
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep >= 4 && currentStep < 5 ? 'process-active' : 'process-inactive'}`}>
-                ④引落登録
+                {L.stepDebit}
               </div>
               <div className="text-lg">→</div>
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 5 ? 'process-active' : 'process-inactive'}`}>
-                ⑤予約
+                {L.stepBooking}
               </div>
               <div className="text-lg">→</div>
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep >= 6 && currentStep < 7 ? 'process-active' : 'process-inactive'}`}>
-                ⑥LINE
+                {L.stepLine}
               </div>
               <div className="text-lg">→</div>
               <div className={`px-3 py-1 rounded-lg font-bold text-sm ${currentStep === 7 ? 'process-active' : 'process-inactive'}`}>
-                ⑦完了
+                {L.stepComplete}
               </div>
             </div>
           </div>
@@ -455,68 +802,68 @@
           {/* メインコンテンツ */}
           <div className="flex-1 p-4 lg:p-8 overflow-auto">
             <div className="max-w-7xl mx-auto space-y-6">
-              
+
               {/* ①プラン決めセクション */}
               <div id="section-1" className={`p-6 rounded-lg shadow-lg ${currentStep === 1 ? 'active-section' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">①プランを決めよう</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s1Title}</h2>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   {/* 左側：入力 */}
                   <div className="space-y-4">
                     <div className={changePlanNextMonth ? 'bg-white p-4 rounded-lg' : ''}>
                       <div>
                         <label className="block mb-2 font-medium text-lg">
-                          {changePlanNextMonth ? '今月のプラン' : 'プラン'}
+                          {changePlanNextMonth ? L.planLabelThisMonth : L.planLabelPlain}
                         </label>
-                        <select 
+                        <select
                           className="w-full p-3 border rounded text-lg"
                           value={plan}
                           onChange={(e) => setPlan(e.target.value)}
                           disabled={currentStep !== 1}
                         >
-                          <option value="" disabled>プランを選んでください</option>
-                          <option value="フルタイム">フルタイム</option>
-                          <option value="平日フル">平日フル</option>
-                          <option value="いつでも夕方">いつでも夕方</option>
+                          <option value="" disabled>{L.selectPlanPlaceholder}</option>
+                          <option value="フルタイム">{planLabel("フルタイム")}</option>
+                          <option value="平日フル">{planLabel("平日フル")}</option>
+                          <option value="いつでも夕方">{planLabel("いつでも夕方")}</option>
                         </select>
                       </div>
-                      
+
                       <div className="mt-4">
                         <label className="block mb-2 font-medium text-lg">
-                          {changePlanNextMonth ? '今月の回数' : '回数'}
+                          {changePlanNextMonth ? L.freqLabelThisMonth : L.freqLabelPlain}
                         </label>
-                        <select 
+                        <select
                           className="w-full p-3 border rounded text-lg"
                           value={frequency}
                           onChange={(e) => setFrequency(e.target.value)}
                           disabled={currentStep !== 1}
                         >
-                          <option value="" disabled>回数を選んでください</option>
-                          <option value="月2回">月2回</option>
-                          <option value="月3回">月3回</option>
-                          <option value="月4回">月4回</option>
-                          <option value="月6回">月6回</option>
+                          <option value="" disabled>{L.selectFreqPlaceholder}</option>
+                          <option value="月2回">{freqLabel("月2回")}</option>
+                          <option value="月3回">{freqLabel("月3回")}</option>
+                          <option value="月4回">{freqLabel("月4回")}</option>
+                          <option value="月6回">{freqLabel("月6回")}</option>
                         </select>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center">
-                      <input 
-                        type="checkbox" 
-                        id="joinAtTrial" 
+                      <input
+                        type="checkbox"
+                        id="joinAtTrial"
                         className="mr-3 h-5 w-5"
                         checked={joinAtTrial}
                         onChange={(e) => setJoinAtTrial(e.target.checked)}
                         disabled={currentStep !== 1}
                       />
-                      <label htmlFor="joinAtTrial" className="text-lg">体験時に入会</label>
+                      <label htmlFor="joinAtTrial" className="text-lg">{L.joinAtTrialLabel}</label>
                     </div>
-                    
+
                     <div className="space-y-3 mt-4">
                       <div className="flex items-center">
-                        <input 
-                          type="radio" 
-                          id="startThisMonth" 
+                        <input
+                          type="radio"
+                          id="startThisMonth"
                           name="startTiming"
                           className="mr-3 h-5 w-5"
                           value="今月から始める"
@@ -524,14 +871,14 @@
                           onChange={(e) => setStartTiming(e.target.value)}
                           disabled={currentStep !== 1}
                         />
-                        <label htmlFor="startThisMonth" className="text-lg">今月から始める</label>
+                        <label htmlFor="startThisMonth" className="text-lg">{L.startThisMonthLabel}</label>
                       </div>
-                      
+
                       {startTiming === "今月から始める" && (
                         <div className="flex items-center ml-8">
-                          <input 
-                            type="checkbox" 
-                            id="changePlanNextMonth" 
+                          <input
+                            type="checkbox"
+                            id="changePlanNextMonth"
                             className="mr-3 h-5 w-5"
                             checked={changePlanNextMonth}
                             onChange={(e) => {
@@ -547,14 +894,14 @@
                             }}
                             disabled={currentStep !== 1}
                           />
-                          <label htmlFor="changePlanNextMonth" className="text-lg">今月と来月でプランを変える</label>
+                          <label htmlFor="changePlanNextMonth" className="text-lg">{L.changePlanNextMonthLabel}</label>
                         </div>
                       )}
-                      
+
                       <div className="flex items-center">
-                        <input 
-                          type="radio" 
-                          id="startNextMonth" 
+                        <input
+                          type="radio"
+                          id="startNextMonth"
                           name="startTiming"
                           className="mr-3 h-5 w-5"
                           value="来月から始める"
@@ -568,96 +915,94 @@
                           }}
                           disabled={currentStep !== 1}
                         />
-                        <label htmlFor="startNextMonth" className="text-lg">来月から始める</label>
+                        <label htmlFor="startNextMonth" className="text-lg">{L.startNextMonthLabel}</label>
                       </div>
                     </div>
-                    
+
                     {changePlanNextMonth && startTiming === "今月から始める" && (
                       <div className="bg-white p-4 rounded-lg mt-4">
                         <div>
-                          <label className="block mb-2 font-medium text-lg">{nextMonthLabel}のプラン</label>
-                          <select 
+                          <label className="block mb-2 font-medium text-lg">{nextMonthPlanFieldLabel}</label>
+                          <select
                             className="w-full p-3 border rounded text-lg"
                             value={nextMonthPlan}
                             onChange={(e) => setNextMonthPlan(e.target.value)}
                             disabled={currentStep !== 1}
                           >
-                            <option value="" disabled>プランを選んでください</option>
-                            <option value="フルタイム">フルタイム</option>
-                            <option value="平日フル">平日フル</option>
-                            <option value="いつでも夕方">いつでも夕方</option>
+                            <option value="" disabled>{L.selectPlanPlaceholder}</option>
+                            <option value="フルタイム">{planLabel("フルタイム")}</option>
+                            <option value="平日フル">{planLabel("平日フル")}</option>
+                            <option value="いつでも夕方">{planLabel("いつでも夕方")}</option>
                           </select>
                         </div>
-                        
+
                         <div className="mt-4">
-                          <label className="block mb-2 font-medium text-lg">{nextMonthLabel}の回数</label>
-                          <select 
+                          <label className="block mb-2 font-medium text-lg">{nextMonthFreqFieldLabel}</label>
+                          <select
                             className="w-full p-3 border rounded text-lg"
                             value={nextMonthFrequency}
                             onChange={(e) => setNextMonthFrequency(e.target.value)}
                             disabled={currentStep !== 1}
                           >
-                            <option value="" disabled>回数を選んでください</option>
-                            <option value="月2回">月2回</option>
-                            <option value="月3回">月3回</option>
-                            <option value="月4回">月4回</option>
-                            <option value="月6回">月6回</option>
+                            <option value="" disabled>{L.selectFreqPlaceholder}</option>
+                            <option value="月2回">{freqLabel("月2回")}</option>
+                            <option value="月3回">{freqLabel("月3回")}</option>
+                            <option value="月4回">{freqLabel("月4回")}</option>
+                            <option value="月6回">{freqLabel("月6回")}</option>
                           </select>
                         </div>
                       </div>
                     )}
                   </div>
-                  
+
                   {/* 右側：計算結果 */}
                   <div className="space-y-4">
-                    <h3 className="font-bold text-xl border-b pb-2">今日の費用</h3>
+                    <h3 className="font-bold text-xl border-b pb-2">{L.todayCost}</h3>
                     <div className="flex justify-between items-baseline text-lg">
-                      <span>入会費</span>
-                      <span>
-                        {getDisplayRegistrationFee().toLocaleString()}<span className="text-sm">円</span>
-                      </span>
+                      <span>{L.enrollmentFee}</span>
+                      <span>{renderFee(getDisplayRegistrationFee())}</span>
                     </div>
                     {/* 今月から始めるか来月から始めるかで内訳の行数を変更 */}
                     {startTiming === "今月から始める" ? (
                       <React.Fragment>
                         <div className="flex justify-between items-baseline text-lg">
-                          <span>今月の月謝</span>
-                          <span>{thisMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                          <span>{L.thisMonthTuition}</span>
+                          <span>{renderFee(thisMonthFee)}</span>
                         </div>
                         <div className="flex justify-between items-baseline text-lg">
-                          <span>来月の月謝</span>
-                          <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                          <span>{L.nextMonthTuition}</span>
+                          <span>{renderFee(nextMonthFee)}</span>
                         </div>
                       </React.Fragment>
                     ) : (
                       <div className="flex justify-between items-baseline text-lg">
-                        <span>来月の月謝</span>
-                        <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                        <span>{L.nextMonthTuition}</span>
+                        <span>{renderFee(nextMonthFee)}</span>
                       </div>
                     )}
-                    
+
                     <div className="flex justify-between items-baseline font-bold text-xl border-t pt-2">
-                      <span>今日の合計</span>
-                      <span>{thisMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
+                      <span>{L.todayTotal}</span>
+                      <span>{renderFee(thisMonthTotal)}</span>
                     </div>
-                    
+
                     <h3 className={`font-bold text-xl border-b pb-2 ${changePlanNextMonth && startTiming === "今月から始める" ? 'mt-32' : 'mt-28'}`}>
-                      {afterNextMonthLabel}以降の費用
+                      {L.afterNextCostTitle(afterNextMonthLabel)}
                     </h3>
                     <div className="flex justify-between items-baseline text-lg">
-                      <span>月謝</span>
-                      <span>{nextMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
+                      <span>{L.tuition}</span>
+                      <span>{renderFee(nextMonthTotal)}</span>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="mt-8 flex justify-between">
-                  <button 
+                  <button
                     className="primary-button px-8 py-4 rounded-lg text-xl font-bold disabled:opacity-50"
                     onClick={() => proceedToNextStep()}
                     disabled={!plan || !frequency || (changePlanNextMonth && (!nextMonthPlan || !nextMonthFrequency))}
                   >
-                    プラン確定（次へ）
+                    {L.confirmPlanButton}
                   </button>
                 </div>
               </div>
@@ -669,52 +1014,52 @@
                   🐬
                 </div>
 
-                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">②確認書を書こう</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">{L.s2Title}</h2>
+
                 <div className="max-w-2xl mx-auto space-y-6 relative z-10">
                   <div className="bg-white p-6 rounded-lg">
-                    <h3 className="font-bold text-xl border-b pb-2 mb-4">①受講者情報🐬</h3>
-                    
+                    <h3 className="font-bold text-xl border-b pb-2 mb-4">{L.s2SubStudentInfo}</h3>
+
                     <table className="w-full text-left border-collapse">
                       <tbody>
                         <tr className="border-b">
-                          <th className="py-3 font-medium text-lg text-gray-700 w-2/5 align-middle">入会日</th>
+                          <th className="py-3 font-medium text-lg text-gray-700 w-2/5 align-middle">{L.thEnrollDate}</th>
                           <td className="py-3 text-xl font-bold align-middle">{formatDate(today)}</td>
                         </tr>
                         <tr className="border-b">
-                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">契約プラン</th>
+                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">{L.thContractPlan}</th>
                           <td className="py-3 align-middle">
                             <span className="text-xl font-bold text-red-600 border-2 border-red-600 rounded-full px-4 py-1 inline-block">
-                              {plan || "未選択"}
+                              {plan ? planLabel(plan) : L.notSelected}
                             </span>
                           </td>
                         </tr>
                         <tr className="border-b">
-                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">回数</th>
+                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">{L.thSessions}</th>
                           <td className="py-3 align-middle">
                             <span className="text-xl font-bold text-red-600 border-2 border-red-600 rounded-full px-4 py-1 inline-block">
-                              {frequency || "未選択"}
+                              {frequency ? freqLabel(frequency) : L.notSelected}
                             </span>
                           </td>
                         </tr>
                         <tr className="border-b">
-                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">受講開始日</th>
+                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">{L.thStartDate}</th>
                           <td className="py-3 text-xl font-bold align-middle">{getStartDate()}</td>
                         </tr>
                         <tr className="border-b">
-                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">今月のお月謝</th>
-                          <td className="py-3 text-xl font-bold align-middle">{thisMonthFee.toLocaleString()}円／月</td>
+                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">{L.thThisMonthTuition}</th>
+                          <td className="py-3 text-xl font-bold align-middle">{renderFeePerMonth(thisMonthFee)}</td>
                         </tr>
                         <tr>
-                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">来月以降のお月謝</th>
-                          <td className="py-3 text-xl font-bold align-middle">{nextMonthFee.toLocaleString()}円／月</td>
+                          <th className="py-3 font-medium text-lg text-gray-700 align-middle">{L.thNextMonthTuitionOnward}</th>
+                          <td className="py-3 text-xl font-bold align-middle">{renderFeePerMonth(nextMonthFee)}</td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
-                  
+
                   <div className="flex justify-between mt-8">
-                    <button 
+                    <button
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
                         setCurrentStep(1);
@@ -723,9 +1068,9 @@
                         }, 100);
                       }}
                     >
-                      戻る
+                      {L.back}
                     </button>
-                    <button 
+                    <button
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
                         setCurrentStep(2.2);
@@ -734,7 +1079,7 @@
                         }, 100);
                       }}
                     >
-                      次へ
+                      {L.next}
                     </button>
                   </div>
                 </div>
@@ -747,26 +1092,26 @@
                   🍎
                 </div>
 
-                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">②確認書を書こう</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">{L.s2Title}</h2>
+
                 <div className="max-w-2xl mx-auto space-y-6 relative z-10">
                   <div className="bg-white p-6 rounded-lg">
-                    <h3 className="font-bold text-xl border-b pb-2 mb-4">② 確認・同意事項🍎</h3>
-                    
+                    <h3 className="font-bold text-xl border-b pb-2 mb-4">{L.s2_2SubTitle}</h3>
+
                     <div className="space-y-4 text-lg">
-                      <p className="font-bold text-xl">ayuiida洋裁教室 受講規約をご覧ください</p>
-                      <p>特に大切なのは、以下の4つです</p>
+                      <p className="font-bold text-xl">{L.termsIntro1}</p>
+                      <p>{L.termsIntro2}</p>
                       <ul className="space-y-3 list-none pl-0">
-                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">1条-1</span><span>お月謝のお支払いは前月27日に翌月分を銀行の自動引き落としです</span></li>
-                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">1条-3</span><span>いかなる理由（自己都合、遅延、規約違反による強制退会）でも返金できません</span></li>
-                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">3条-1</span><span>プラン変更、休会、退会をご希望の際は、希望月の5日までに届け出を提出してください</span></li>
-                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">5条-3</span><span>レッスン時間外の問い合わせ対応は、「フルタイム」「平日フル」プラン限定です</span></li>
+                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">{L.termArticleLabel1}</span><span>{L.termArticleText1}</span></li>
+                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">{L.termArticleLabel2}</span><span>{L.termArticleText2}</span></li>
+                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">{L.termArticleLabel3}</span><span>{L.termArticleText3}</span></li>
+                        <li className="flex"><span className="font-bold mr-4 whitespace-nowrap">{L.termArticleLabel4}</span><span>{L.termArticleText4}</span></li>
                       </ul>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between mt-8">
-                    <button 
+                    <button
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
                         setCurrentStep(2);
@@ -775,9 +1120,9 @@
                         }, 100);
                       }}
                     >
-                      戻る
+                      {L.back}
                     </button>
-                    <button 
+                    <button
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
                         setCurrentStep(2.3);
@@ -786,7 +1131,7 @@
                         }, 100);
                       }}
                     >
-                      次へ
+                      {L.next}
                     </button>
                   </div>
                 </div>
@@ -799,20 +1144,20 @@
                   ⚽
                 </div>
 
-                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">②確認書を書こう</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">{L.s2Title}</h2>
+
                 <div className="max-w-2xl mx-auto space-y-6 relative z-10">
                   <div className="bg-white p-6 rounded-lg">
-                    <h3 className="font-bold text-xl border-b pb-2 mb-4">③ ご署名⚽</h3>
-                    
+                    <h3 className="font-bold text-xl border-b pb-2 mb-4">{L.s2_3SubTitle}</h3>
+
                     <div className="text-lg space-y-2 text-center py-4">
-                      <p className="font-bold">「受講規約」に同意いただける場合は</p>
-                      <p className="font-bold">太枠内にお名前、電話番号、住所をご記入ください</p>
+                      <p className="font-bold">{L.signatureText1}</p>
+                      <p className="font-bold">{L.signatureText2}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between mt-8">
-                    <button 
+                    <button
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
                         setCurrentStep(2.2);
@@ -821,9 +1166,9 @@
                         }, 100);
                       }}
                     >
-                      戻る
+                      {L.back}
                     </button>
-                    <button 
+                    <button
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
                         setCurrentStep(2.4);
@@ -832,7 +1177,7 @@
                         }, 100);
                       }}
                     >
-                      次へ
+                      {L.next}
                     </button>
                   </div>
                 </div>
@@ -845,21 +1190,21 @@
                   🧸
                 </div>
 
-                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">②確認書を書こう</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">{L.s2Title}</h2>
+
                 <div className="max-w-2xl mx-auto space-y-6 relative z-10">
                   <div className="bg-white p-6 rounded-lg">
-                    <h3 className="font-bold text-xl border-b pb-2 mb-4">④ アンケート🧸</h3>
-                    
+                    <h3 className="font-bold text-xl border-b pb-2 mb-4">{L.s2_4SubTitle}</h3>
+
                     <div className="text-lg space-y-4 py-4 text-center">
-                      <p className="font-bold text-xl mb-4">アンケートにご協力をお願いいたします</p>
-                      <p className="font-bold">このお教室をどのようにお知りになりましたか？</p>
-                      <p className="font-bold">あてはまるものに〇をつけてください</p>
+                      <p className="font-bold text-xl mb-4">{L.surveyText1}</p>
+                      <p className="font-bold">{L.surveyText2}</p>
+                      <p className="font-bold">{L.surveyText3}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-between mt-8">
-                    <button 
+                    <button
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
                         setCurrentStep(2.3);
@@ -868,9 +1213,9 @@
                         }, 100);
                       }}
                     >
-                      戻る
+                      {L.back}
                     </button>
-                    <button 
+                    <button
                       className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                       onClick={() => {
                         const hasChange = changePlanNextMonth && startTiming === "今月から始める" && plan && frequency && nextMonthPlan && nextMonthFrequency;
@@ -887,7 +1232,7 @@
                         }
                       }}
                     >
-                      次へ
+                      {L.next}
                     </button>
                   </div>
                 </div>
@@ -895,42 +1240,42 @@
 
               {/* ②-2プラン変更届セクション */}
               <div id="section-2-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 2.5 ? 'active-section' : 'inactive-section'}`}>
-                  <h2 className="text-2xl font-bold mb-6 text-center">プラン変更届を書こう</h2>
-                  
+                  <h2 className="text-2xl font-bold mb-6 text-center">{L.s2_5Title}</h2>
+
                   <div className="max-w-2xl mx-auto space-y-6">
                     <div className="text-gray-700 space-y-2 mb-4">
-                      <p>①お名前、電話番号をご記入ください</p>
-                      <p>②確認・同意事項をお読みになり、□にチェックを入れてください</p>
+                      <p>{L.planChangeStep1}</p>
+                      <p>{L.planChangeStep2}</p>
                     </div>
-                    
+
                     <div className="bg-white p-6 rounded-lg space-y-4">
-                      <h3 className="text-xl font-bold mb-4">③申込内容</h3>
-                      
+                      <h3 className="text-xl font-bold mb-4">{L.planChangeStep3}</h3>
+
                       <div className="space-y-3">
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">申込日：</span>
+                          <span className="font-medium">{L.applicationDate}</span>
                           <span className="font-bold">{formatDate(today)}</span>
                         </div>
-                        
+
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">変更前のプラン：</span>
-                          <span className="font-bold">{plan} {frequency}</span>
+                          <span className="font-medium">{L.planBeforeChange}</span>
+                          <span className="font-bold">{planLabel(plan)} {freqLabel(frequency)}</span>
                         </div>
-                        
+
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium text-lg">変更後のプラン：</span>
-                          <span className="font-bold">{nextMonthPlan} {nextMonthFrequency}</span>
+                          <span className="font-medium text-lg">{L.planAfterChange}</span>
+                          <span className="font-bold">{planLabel(nextMonthPlan)} {freqLabel(nextMonthFrequency)}</span>
                         </div>
-                        
+
                         <div className="flex items-center space-x-4">
-                          <span className="font-medium">変更適用日：</span>
+                          <span className="font-medium">{L.effectiveDate}</span>
                           <span className="font-bold">{formatDate(applyDate)}</span>
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex justify-between mt-8">
-                      <button 
+                      <button
                         className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                         onClick={() => {
                           setCurrentStep(2.4);
@@ -939,9 +1284,9 @@
                           }, 100);
                         }}
                       >
-                        戻る
+                        {L.back}
                       </button>
-                      <button 
+                      <button
                         className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                         onClick={() => {
                           setCurrentStep(3);
@@ -950,7 +1295,7 @@
                           }, 100);
                         }}
                       >
-                        次へ
+                        {L.next}
                       </button>
                     </div>
                   </div>
@@ -958,43 +1303,41 @@
 
               {/* ③お会計セクション（薄いブルー背景） */}
               <div id="section-3" className={`p-6 rounded-lg shadow-lg ${currentStep === 3 ? 'active-section-blue' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-2 text-center">③本日のお会計をしよう</h2>
-                <p className="text-center text-lg text-gray-700 mb-6">先生を呼んでね</p>
-                
+                <h2 className="text-2xl font-bold mb-2 text-center">{L.s3Title}</h2>
+                <p className="text-center text-lg text-gray-700 mb-6">{L.callTeacher}</p>
+
                 <div className="max-w-2xl mx-auto">
                   <div className="bg-white p-6 rounded-lg space-y-4">
-                    <h3 className="font-bold text-xl border-b pb-2">今日の費用</h3>
+                    <h3 className="font-bold text-xl border-b pb-2">{L.todayCost}</h3>
                     <div className="flex justify-between items-baseline text-lg">
-                      <span>入会費</span>
-                      <span>
-                         {getDisplayRegistrationFee().toLocaleString()}<span className="text-sm">円</span>
-                      </span>
+                      <span>{L.enrollmentFee}</span>
+                      <span>{renderFee(getDisplayRegistrationFee())}</span>
                     </div>
                     {startTiming === "今月から始める" ? (
                       <React.Fragment>
                         <div className="flex justify-between items-baseline text-lg">
-                          <span>今月の月謝</span>
-                          <span>{thisMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                          <span>{L.thisMonthTuition}</span>
+                          <span>{renderFee(thisMonthFee)}</span>
                         </div>
                         <div className="flex justify-between items-baseline text-lg">
-                          <span>来月の月謝</span>
-                          <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                          <span>{L.nextMonthTuition}</span>
+                          <span>{renderFee(nextMonthFee)}</span>
                         </div>
                       </React.Fragment>
                     ) : (
                       <div className="flex justify-between items-baseline text-lg">
-                        <span>来月の月謝</span>
-                        <span>{nextMonthFee.toLocaleString()}<span className="text-sm">円</span></span>
+                        <span>{L.nextMonthTuition}</span>
+                        <span>{renderFee(nextMonthFee)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-baseline font-bold text-xl border-t pt-2">
-                      <span>今日の合計</span>
-                      <span>{thisMonthTotal.toLocaleString()}<span className="text-sm">円</span></span>
+                      <span>{L.todayTotal}</span>
+                      <span>{renderFee(thisMonthTotal)}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between mt-8">
-                    <button 
+                    <button
                       className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                       onClick={() => {
                         const hasChange = changePlanNextMonth && startTiming === "今月から始める" && plan && frequency && nextMonthPlan && nextMonthFrequency;
@@ -1006,14 +1349,14 @@
                         }, 100);
                       }}
                     >
-                      戻る
+                      {L.back}
                     </button>
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
-                        <p className="text-sm font-medium text-gray-700">今日分・・・<span style={{color: '#10B981'}}>OK！</span><span>✅</span></p>
-                        <p className="text-sm font-medium text-gray-700">{afterNextMonthLabel}以降・・・→</p>
+                        <p className="text-sm font-medium text-gray-700">{L.todayPortionOk}<span style={{color: '#10B981'}}>{L.okMark}</span><span>✅</span></p>
+                        <p className="text-sm font-medium text-gray-700">{L.fromMonthArrow(afterNextMonthLabel)}</p>
                       </div>
-                      <button 
+                      <button
                         className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                         onClick={() => {
                           setCurrentStep(4);
@@ -1022,7 +1365,7 @@
                           }, 100);
                         }}
                       >
-                        次へ
+                        {L.next}
                       </button>
                     </div>
                   </div>
@@ -1031,13 +1374,13 @@
 
               {/* ④引き落とし登録セクション（薄いブルー背景） */}
               <div id="section-4" className={`p-6 rounded-lg shadow-lg ${currentStep === 4 ? 'active-section-blue' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">④{afterNextMonthLabel}以降の引き落とし登録</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s4Title(afterNextMonthLabel)}</h2>
+
                 <div className="flex flex-col items-center space-y-6 py-8">
-                  <p className="text-2xl font-bold">銀行のキャッシュカードをご用意ください</p>
-                  
+                  <p className="text-2xl font-bold">{L.cashCardPrompt}</p>
+
                   <div className="flex space-x-8 mt-8">
-                    <button 
+                    <button
                       className="primary-button px-10 py-4 rounded-lg text-xl font-bold"
                       onClick={() => {
                         setCurrentStep(4.5);
@@ -1046,9 +1389,9 @@
                         }, 100);
                       }}
                     >
-                      持ってきた
+                      {L.broughtIt}
                     </button>
-                    <button 
+                    <button
                       className="secondary-button px-10 py-4 rounded-lg text-xl font-bold"
                       data-sound="decision"
                       onClick={() => {
@@ -1058,13 +1401,13 @@
                         }, 100);
                       }}
                     >
-                      持ってきていない
+                      {L.didNotBringIt}
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
-                  <button 
+                  <button
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                     onClick={() => {
                       setCurrentStep(3);
@@ -1073,7 +1416,7 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
                   {/* 次へボタンは非表示 */}
                   <div></div>
@@ -1082,24 +1425,24 @@
 
               {/* ④-2 ご自宅での口座振替のご案内セクション（薄いブルー背景） */}
               <div id="section-4-2" className={`p-6 rounded-lg shadow-lg ${currentStep === 4.2 ? 'active-section-blue' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">④ご自宅での口座振替のご案内</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s4_2Title}</h2>
+
                 <div className="flex flex-col items-center space-y-6 py-8 text-center">
                   <p className="text-xl font-bold leading-relaxed">
-                    先生から案内をお受け取りください🌸
+                    {L.homeInstructionReceive}
                   </p>
-                  
+
                   <p className="text-2xl font-bold text-red-600 mt-6">
-                    登録締め切り日 {targetNextMonthNum}月5日 23時59分
+                    {L.deadlineText(nextMonthNumLabel)}
                   </p>
-                  
+
                   <p className="text-lg font-bold mt-8">
-                    ※先生は確認書に「ご自宅で口座振替登録 {targetMonthAfterNext}月分以降」と記載してください
+                    {L.teacherNoteText(afterNextMonthLabel)}
                   </p>
                 </div>
-                
+
                 <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
-                  <button 
+                  <button
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                     onClick={() => {
                       setCurrentStep(4);
@@ -1108,9 +1451,9 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
-                  <button 
+                  <button
                     className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                     onClick={() => {
                       setLastStep4(4.2);
@@ -1120,22 +1463,22 @@
                       }, 100);
                     }}
                   >
-                    次へ(受け取った)
+                    {L.nextReceived}
                   </button>
                 </div>
               </div>
 
               {/* ④-5 振替口座登録セクション（薄いブルー背景） */}
               <div id="section-4-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 4.5 ? 'active-section-blue' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">④{afterNextMonthLabel}以降の引き落とし登録 振替口座登録</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s4_5Title(afterNextMonthLabel)}</h2>
+
                 <div className="flex flex-col items-center space-y-6 py-8 text-center">
-                  <p className="text-2xl font-bold text-black">{afterNextMonthLabel}以降の銀行口座振替の登録をします</p>
-                  <p className="text-xl font-medium">先生は口座登録端末とタブレットをお客様にお渡ししてください</p>
-                  <p className="text-lg font-bold mt-8">下のボタンは先生が押してください。ICチップ読み取りはできません。</p>
-                  
+                  <p className="text-2xl font-bold text-black">{L.registerBankText(afterNextMonthLabel)}</p>
+                  <p className="text-xl font-medium">{L.handDeviceText}</p>
+                  <p className="text-lg font-bold mt-8">{L.teacherPressText}</p>
+
                   <div className="flex space-x-8 mt-6">
-                    <button 
+                    <button
                       className="primary-button px-10 py-4 rounded-lg text-xl font-bold"
                       onClick={() => {
                         setLastStep4(4.5);
@@ -1145,9 +1488,9 @@
                         }, 100);
                       }}
                     >
-                      うまくいった
+                      {L.itWorked}
                     </button>
-                    <button 
+                    <button
                       className="secondary-button px-10 py-4 rounded-lg text-xl font-bold"
                       onClick={() => {
                         setCurrentStep(4.8);
@@ -1156,13 +1499,13 @@
                         }, 100);
                       }}
                     >
-                      うまくいかない
+                      {L.itDidNotWork}
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
-                  <button 
+                  <button
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                     onClick={() => {
                       setCurrentStep(4);
@@ -1171,7 +1514,7 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
                   {/* 次へボタンは非表示 */}
                   <div></div>
@@ -1180,17 +1523,17 @@
 
               {/* ④-8 別の方法(Web)での口座振替のご案内セクション（薄いブルー背景） */}
               <div id="section-4-8" className={`p-6 rounded-lg shadow-lg ${currentStep === 4.8 ? 'active-section-blue' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">④別の方法(Web)での口座振替のご案内</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s4_8Title}</h2>
+
                 <div className="flex flex-col items-center space-y-6 py-8 text-center">
                   <p className="text-xl font-bold leading-relaxed">
-                    もちろん大丈夫です。別の方法で登録します<br />
-                    先生からやり方のご案内をお受け取りください🌷
+                    {L.webAltText1}<br />
+                    {L.webAltText2}
                   </p>
                 </div>
-                
+
                 <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
-                  <button 
+                  <button
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                     onClick={() => {
                       setCurrentStep(4.5);
@@ -1199,9 +1542,9 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
-                  <button 
+                  <button
                     className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
                     onClick={() => {
                       setLastStep4(4.8);
@@ -1211,18 +1554,18 @@
                       }, 100);
                     }}
                   >
-                    次へ(できた！)
+                    {L.nextDone}
                   </button>
                 </div>
               </div>
 
               {/* ⑤体験のご予約は？セクション */}
               <div id="section-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 5 ? 'active-section' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">⑤体験のご予約は？</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s5Title}</h2>
+
                 <div className="flex flex-col items-center space-y-6 py-8 text-center">
                   <div className="flex space-x-8 mt-6">
-                    <button 
+                    <button
                       className="px-10 py-4 rounded-lg text-xl font-bold text-white shadow"
                       style={{ backgroundColor: '#06C755' }}
                       onClick={() => {
@@ -1232,9 +1575,9 @@
                         }, 100);
                       }}
                     >
-                      HP→LINE
+                      {L.hpLineButton}
                     </button>
-                    <button 
+                    <button
                       className="primary-button px-10 py-4 rounded-lg text-xl font-bold shadow"
                       onClick={() => {
                         setCurrentStep(6);
@@ -1243,13 +1586,13 @@
                         }, 100);
                       }}
                     >
-                      ストアカ
+                      {L.storecaButton}
                     </button>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
-                  <button 
+                  <button
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                     onClick={() => {
                       setCurrentStep(lastStep4);
@@ -1258,7 +1601,7 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
                   <div></div>
                 </div>
@@ -1266,21 +1609,21 @@
 
               {/* ⑥予約のためにお教室とお友達になろう！セクション */}
               <div id="section-6" className={`p-6 rounded-lg shadow-lg ${currentStep === 6 ? 'active-section' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">⑥予約のためにお教室とお友達になろう！</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s6Title}</h2>
+
                 <div className="flex flex-col items-center space-y-6 py-8 text-center">
                   <p className="text-xl font-bold leading-relaxed">
-                    こちらのQRをご自身のスマホで読み取ってね
+                    {L.scanQrText}
                   </p>
-                  
-                  <img 
+
+                  <img
                     src="./LINEQR.png"
-                    alt="LINE QRコード"
-                    style={{ 
-                      width: "250px", 
-                      height: "250px", 
+                    alt={L.lineQrAlt}
+                    style={{
+                      width: "250px",
+                      height: "250px",
                       objectFit: "contain",
-                      border: "1px solid #ddd" 
+                      border: "1px solid #ddd"
                     }}
                     onError={(e) => {
                       console.error("画像読み込みエラー:", e.target.src);
@@ -1289,22 +1632,22 @@
                     }}
                   />
                   {/* 画像が読み込めなかった場合のプレースホルダー */}
-                  <div 
-                    className="qr-placeholder" 
-                    style={{ 
+                  <div
+                    className="qr-placeholder"
+                    style={{
                       display: 'none',
                       width: "250px",
                       height: "250px"
                     }}
                   >
                     <div className="text-center">
-                      <p className="text-sm">LINE<br/>QRコード</p>
+                      <p className="text-sm">LINE<br/>{L.qrCodeWord}</p>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-between mt-8 w-full max-w-2xl mx-auto">
-                  <button 
+                  <button
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg text-lg font-bold hover:bg-gray-600"
                     onClick={() => {
                       setCurrentStep(5);
@@ -1313,7 +1656,7 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
                   <button
                     className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
@@ -1324,23 +1667,23 @@
                       }, 100);
                     }}
                   >
-                    次へ(できた！)
+                    {L.nextDone}
                   </button>
                 </div>
               </div>
 
               {/* ⑥-2 LINEから予約がとれるようにするセクション */}
               <div id="section-6-5" className={`p-6 rounded-lg shadow-lg ${currentStep === 6.5 ? 'active-section' : 'inactive-section'}`}>
-                <h2 className="text-2xl font-bold mb-6 text-center">LINEから予約がとれるようにする</h2>
+                <h2 className="text-2xl font-bold mb-6 text-center">{L.s6_5Title}</h2>
 
                 <div className="flex flex-col items-center space-y-6 py-8 text-center">
                   <p className="text-xl font-bold leading-relaxed">
-                    LINE予約用のアカウントを作成しましょう
+                    {L.lineAccountText}
                   </p>
 
                   <img
                     src="./20250528来月以降の月謝登録手順 (1).jpg"
-                    alt="LINEから予約を取る手順"
+                    alt={L.lineStepsAlt}
                     style={{
                       maxWidth: "100%",
                       width: "600px",
@@ -1360,7 +1703,7 @@
                       }, 100);
                     }}
                   >
-                    戻る
+                    {L.back}
                   </button>
                   <button
                     className="primary-button px-6 py-3 rounded-lg text-lg font-bold"
@@ -1371,7 +1714,7 @@
                       }, 100);
                     }}
                   >
-                    次へ(できた！)
+                    {L.nextDone}
                   </button>
                 </div>
               </div>
@@ -1381,32 +1724,32 @@
                 {/* 紙吹雪の背景 */}
                 <img
                   src="./confetti-10.gif"
-                  alt="紙吹雪"
+                  alt={L.confettiAlt}
                   className="absolute top-0 left-0 h-full object-cover opacity-80 pointer-events-none z-0"
                 />
                 <img
                   src="./confetti-10.gif"
-                  alt="紙吹雪"
+                  alt={L.confettiAlt}
                   className="absolute top-0 right-0 h-full object-cover opacity-80 pointer-events-none transform scale-x-[-1] z-0"
                 />
 
-                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">⑦完了</h2>
-                
+                <h2 className="text-2xl font-bold mb-6 text-center relative z-10">{L.s7Title}</h2>
+
                 <div className="relative z-10 flex flex-col items-center justify-center space-y-8 py-10">
                   <div className="text-center space-y-6">
                     <h3 className="text-3xl md:text-4xl font-bold text-black leading-relaxed">
-                      ようこそ！<br/>ayuiida洋裁教室へ！
+                      {L.welcomeLine1}<br/>{L.welcomeLine2}
                     </h3>
                     <p className="text-xl font-medium">
-                      お裁縫のある豊かな生活をどうぞお楽しみくださいませ🌸
+                      {L.enjoyText}
                     </p>
                     <p className="text-xl font-bold text-red-600">
-                      先生からプレゼント資料をお受け取りください
+                      {L.receiveGiftText}
                     </p>
                   </div>
                 </div>
               </div>
-              
+
             </div>
           </div>
 
@@ -1415,8 +1758,8 @@
             <div className="modal-overlay">
               <div className="modal-content">
                 <p className="text-lg mb-8 font-bold leading-relaxed text-left">
-                  本日は事務処理の期限を過ぎています。<br/>
-                  そのため、プラン変更は最短で{targetMonthAfterNext}月1日から適用となりますが、よろしいですか？
+                  {L.lateModalText1}<br/>
+                  {L.lateModalText2(afterNextMonthLabel)}
                 </p>
                 <div className="flex justify-center space-x-6">
                   {/* はいボタン */}
@@ -1427,7 +1770,7 @@
                       setShowLateModal(false);
                     }}
                   >
-                    はい<span className="ml-2" style={{color: 'green'}}>✅</span>
+                    {L.yes}<span className="ml-2" style={{color: 'green'}}>✅</span>
                   </button>
                   {/* いいえボタン */}
                   <button
@@ -1438,7 +1781,7 @@
                       setShowLateModal(false);
                     }}
                   >
-                    いいえ<span className="ml-2 font-bold" style={{color: 'red'}}>✖</span>
+                    {L.no}<span className="ml-2 font-bold" style={{color: 'red'}}>✖</span>
                   </button>
                 </div>
               </div>
